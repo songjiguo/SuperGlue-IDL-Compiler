@@ -58,11 +58,16 @@ class BlockCode(object):
     def show_code(self):
         print (self.block_code)  
         
-#===============================================================================
-# # main function to generate new AST and new c code
-#===============================================================================  
+def traverse(o, tree_types=(list, tuple)):
+    if isinstance(o, tree_types):
+        for value in o:
+            for subvalue in traverse(value, tree_types):
+                yield subvalue
+    else:
+        yield o
+        
 ########################
-##  function block
+##  blocks
 ########################
 
 def block_cli_if_save_data():
@@ -115,20 +120,20 @@ def block_cli_if_track():
 
     BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
         
-    pred = ["desc_close_remove",
+    pred = ["desc_dep_close_remove",
             "terminate"]
     code = "assert(desc);\n" \
-"desc_alloc(desc);\n" \
+"desc_dealloc(desc);\n" \
 
     BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
     
-    pred = ["desc_close_keep",
+    pred = ["desc_dep_close_keep",
             "terminate"]
     code = "assert(desc);\n" \
 "\n" \
 "child_desc_list = desc->child_desc_list;\n" \
 "if (EMPTY_LIST(child_desc_list)) {\n" \
-"    desc_alloc(desc);\n" \
+"    desc_dealloc(desc);\n" \
 "}\n" \
 
     BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
@@ -297,44 +302,41 @@ def block_cli_if_invoke():
     BLOCK_CLI_IF_INVOKE.add_blk(pred, code, "BLOCK_CLI_IF_INVOKE")    
     return BLOCK_CLI_IF_INVOKE          
 
-########################
-##  global block
-########################
-def block_cli_if_global_default():
-    #print ("[[BLOCK_CLI_IF_GLOBAL]]")
-    BLOCK_CLI_IF_GLOBAL = keywords.IDLBlock()
-    
-    pred = ["global"]
-    code = "int global;\n" \
-
-    BLOCK_CLI_IF_GLOBAL.add_blk("BLOCK_CLI_IF_GLOBAL", pred, code)
-    
-    return BLOCK_CLI_IF_GLOBAL
-
 #===============================================================================
-# # block is in the form of (predicate, code)
-# # gdescp is in the form of ['desc_close_itself', 'desc_global_global', ...]
-# # fdescp is in the form of [function name, normalPara, sm_state, idlRet, idlPara]
-# This is the evaluation function and return the code for a match
-#===============================================================================
-        
+#  block is in the form of (predicate, code)
+#  gdescp is in the form of ['desc_close_itself', 'desc_global_global', ...]
+#  fdescp is in the form of [function name, normalPara, sm_state, idlRet, idlPara]
+#
+#  This is the evaluation function and return the code for a match
+#===============================================================================   
+def construct_blocks(globalblocks, funcblocks):
+    fblk = []
+    gblk = []
+    
+    fblk.append(block_cli_if_invoke())
+    fblk.append(block_cli_if_invoke_ser_intro())
+    fblk.append(block_cli_if_recover_subtree())
+    fblk.append(block_cli_if_track())
+    fblk.append(block_cli_if_rec_init())
+       
+    gblk.append(block_cli_if_recover())
+    gblk.append(block_cli_if_basic_id())
+    gblk.append(block_cli_if_recover_upcall())
+    gblk.append(block_cli_if_rec_data())
+    gblk.append(block_cli_if_save_data())  
+
+    for item in gblk:
+        globalblocks.append(item)          
+    for item in fblk:
+        funcblocks.append(item) 
+
+     
 def ast_eval(block, (gdescp, fdescp)):
     #print ("\n <<<<<<< eval starts! >>>>>>>>")
     IFCode = ""
     IFBlkName = ""
-    #print ("global description")
-    #pprint (gdescp)
-    
-    #===========================================================================
-    # if (fdescp):
-    #     print ("a function description --" + fdescp[0])
-    #     pprint (fdescp)
-    #     #print ("--->\n")
-    #===========================================================================
     
     list_descp = list(traverse(gdescp)) + list(traverse(fdescp)) 
-    #print (list_descp)
-    #print()
     
     for blk in block.list:
         list_blks = []
@@ -347,9 +349,11 @@ def ast_eval(block, (gdescp, fdescp)):
         match = 0;
         for pred in list_blks:
             pred = pred.split('|')
-            #print ("a pred: --> ")
-            #print (pred)
-            #print (list_descp)
+            #===================================================================
+            # print ("a pred: --> ")
+            # print (pred)
+            # print (list_descp)
+            #===================================================================
             for desc in list_descp:
                 if (desc in pred):
                     match = match + 1;
@@ -361,23 +365,17 @@ def ast_eval(block, (gdescp, fdescp)):
             break;  # TODO: check the consistency
     
     return (IFBlkName, IFCode)
- 
     #print ("<<<<<<< eval ends! >>>>>>>>\n")
-    #exit()
-    #return IFCode
      
 #===============================================================================
 # This is the main function to generate new AST 
 #===============================================================================
 def idl_generate(result, parsed_ast):
 
-    global globaldescp
-    global funcdescps
-    
     globaldescp     = []
     funcdescps      = []
-
-    globalblocks     = []
+        
+    globalblocks    = []
     funcblocks      = []
 
     ##########################################
@@ -412,27 +410,11 @@ def idl_generate(result, parsed_ast):
             funcdescps.append(perFunc)
     
     ##########################################
-    ####  construct (predicate, code)
-    ##########################################    
-    tmpf = []
-    tmpg = []
-    
-    tmpf.append(block_cli_if_invoke())
-    tmpf.append(block_cli_if_invoke_ser_intro())
-    tmpf.append(block_cli_if_recover_subtree())
-    tmpf.append(block_cli_if_track())
-    tmpf.append(block_cli_if_rec_init())
-       
-    tmpg.append(block_cli_if_recover())
-    tmpg.append(block_cli_if_basic_id())
-    tmpg.append(block_cli_if_recover_upcall())
-    tmpg.append(block_cli_if_rec_data())
-    tmpg.append(block_cli_if_save_data())
-    
-    for item in tmpf:
-        funcblocks.append(item) 
-    for item in tmpg:
-        globalblocks.append(item)    
+    ####  construct blocks of (predicate, code)
+    ##########################################  
+      
+    construct_blocks(globalblocks, funcblocks)
+        
     ##########################################
     #### evaluate and match
     ##########################################   
@@ -452,11 +434,6 @@ def idl_generate(result, parsed_ast):
         
     for fdesc in IFDesc[1]:
         __IFcode = {}        
-        #=======================================================================
-        # print ("***********")
-        # print (fdesc[0]) 
-        # print ("***********")
-        #=======================================================================
         for fblk in funcblocks:
             #fblk.show()
             name, code = ast_eval(fblk, (IFDesc[0], fdesc))
@@ -466,82 +443,25 @@ def idl_generate(result, parsed_ast):
             code = code.replace("params", ', '.join(param_list))
             code = code.replace("par_sz", str(len(param_list)))
             if (name and code):
-                __IFcode[name] = code
-            
+                __IFcode[name] = code            
         #=======================================================================
         # for key, value in __IFcode.iteritems():
         #     if (key):
         #         print ("<<<<" + key + ">>>>")
         #         print (value)
-        #=======================================================================
-                
+        #=======================================================================                
         IFcode[fdesc[0]] = __IFcode      
         
-    pprint (IFcode)
-
-    #print ("\n******** Constructing new AST *********\n")    
-    #ast = parser.parse(IFcode, filename='<none>')
-    #ast.show()
-#===============================================================================
-# 
-#     exit()
-#     
-#     global mycode, cond, rules, curr_tuple, curr_func
-# 
-#     cond    = ""
-#     rules   = keywords.IDLRule(cond)
-#     block   = keywords.IDLBlocks()    
-#     interf  = keywords.IDLInterface()
-# 
-# 
-#     print (block.block_list)
-#     print (rules.rule_list)
-#     
-#     #print (interf.interf_list)
-#     
-#     mycode  = MyCode()
-# 
-#     # init all code blocks
-#     for curr_if in interf.interf_list:
-#         #print (curr_if)
-#         if (curr_if != "client"):   # test client interface
-#             continue
-#         mycode.add_interface(curr_if)
-#         for curr_block in block.block_list: 
-#             #print (curr_block)
-#             mycode.ifcode[curr_if].add_block(curr_block)
-#             __id_generate(curr_if, curr_block)
-#             #print (mycode.ifcode[curr_if].blocks[curr_block].rules)
-#             
-#     #===========================================================================
-#     # # test condition here 
-#     # for tup in result.tuple:
-#     #     #pprint (tup.info)
-#     #     curr_tuple = copy.copy(tup)  # one service has one tuple -- this is for a service
-#     #     test_tuple_condition()        
-#     #     for func in tup.functions:
-#     #         curr_func = copy.copy(func)
-#     #         composite_condition()
-#     #===========================================================================
-#      
-#===============================================================================
-
-
-#===============================================================================
-# def __id_generate(interface, block_name):
-#     
-#     #mycode.ifcode[interface].blocks[block_name].rules.append("test")
-#     
-#     name = mycode.ifcode[interface].blocks[block_name].name
-#     mycode.ifcode[interface].blocks[block_name].gen_code(name)
-# 
-#     print (mycode.ifcode[interface].blocks[block_name].rules)
-#===============================================================================
-
-def traverse(o, tree_types=(list, tuple)):
-    if isinstance(o, tree_types):
-        for value in o:
-            for subvalue in traverse(value, tree_types):
-                yield subvalue
-    else:
-        yield o
+    #pprint (IFcode)
+    print ()
+    
+    
+    for kname, vdict in IFcode.iteritems():
+        print ("**********************")
+        print (kname)
+        print ()
+        for blkname, blkcode in vdict.iteritems():
+            print ("******")
+            print (blkname)
+            print (blkcode)
+             
