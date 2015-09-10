@@ -1,0 +1,35 @@
+/* Composite APIs:
+
+memory manager:
+vaddr_t mman_get_page(spdid_t spd, vaddr_t addr, int flags);
+int mman_revoke_page(spdid_t spd, vaddr_t addr, int flags); 
+vaddr_t __mman_alias_page(spdid_t s_spd, vaddr_t s_addr, u32_t d_spd_flags, vaddr_t d_addr);
+
+scheduler:
+int sched_wakeup(spdid_t spdid, unsigned short int thd_id);
+int sched_block(spdid_t spdid, unsigned short int dependency_thd);
+
+ram filesystem/mail box:
+td_t tsplit(spdid_t spdid, td_t tid, char *param, int len, tor_flags_t tflags, long evtid);
+void trelease(spdid_t spdid, td_t tid);
+int tmerge(spdid_t spdid, td_t td, td_t td_into, char *param, int len);
+int tread(spdid_t spdid, td_t td, int cbid, int sz);
+int treadp(spdid_t spdid, td_t td, int len, int *off, int *sz);
+int twrite(spdid_t spdid, td_t td, int cbid, int sz);
+int twritep(spdid_t spdid, td_t td, int cbid, int sz);
+
+evt manager:
+long evt_split(spdid_t spdid, long parent_evt, int grp);
+void evt_free(spdid_t spdid, long extern_evt);
+long evt_wait(spdid_t spdid, long extern_evt);
+int evt_trigger(spdid_t spdid, long extern_evt);
+
+lock manager:
+int lock_component_take(spdid_t spd, unsigned long lock_id, unsigned short int thd_id);
+int lock_component_release(spdid_t spd, unsigned long lock_id);
+
+time event manager:
+int timed_event_block(spdid_t spdinv, unsigned int amnt);
+int timed_event_wakeup(spdid_t spdinv, unsigned short int thd_id);
+
+*/

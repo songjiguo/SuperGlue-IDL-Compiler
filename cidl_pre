@@ -1,0 +1,80 @@
+# 1 "cidl.h"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "cidl.h"
+
+
+
+
+
+
+
+# 1 "cidl_gen.h" 1
+
+
+
+
+typedef int td_t;
+typedef int spdid_t;
+typedef int tor_flags_t;
+typedef int evt_t;
+typedef int vaddr_t;
+typedef unsigned int u32_t;
+typedef unsigned short int us32_t;
+typedef unsigned long ul_t;
+typedef unsigned long long ull_t;
+# 9 "cidl.h" 2
+# 30 "cidl.h"
+struct service_tuple {
+ int TP_desc_close_TP_itself;
+ int TP_desc_dep_create_TP_same;
+ int TP_desc_dep_close_TP_keep;
+ int TP_desc_global_TP_global;
+ int TP_desc_block_TP_true_TP_lock_component;
+ int TP_desc_has_data_TP_true;
+ int TP_resc_has_data_TP_true;
+
+ int TP_create_TP_tsplit;
+ int TP_terminate_TP_trelease;
+ int TP_mutate_TP_treadp;
+ int TP_mutate_TP_twritep;
+};
+
+struct desc_data {
+ td_t tid;
+ int offset;
+
+ td_t parent_tid;
+ char *param;
+ int param_sz;
+ spdid_t spdid;
+ tor_flags_t tflags;
+ evt_t evtid;
+};
+
+typedef td_t CD_desc_data_retval_CD_td_t_CD_tid; CD_desc_data_retval_CD_td_t_CD_tid
+tsplit(spdid_t CD_desc_data_CD_spdid,
+    td_t CD_desc_data_CD_parent_desc_CD_parent_tid,
+    char *CD_desc_data_CD_param,
+    int CD_desc_data_CD_size_of(param, len),
+    tor_flags_t CD_desc_data_CD_tflags,
+    evt_t CD_desc_data_CD_evtid);
+
+
+int
+treadp(spdid_t spdid,
+    td_t CD_desc_lookup_CD_tid,
+     int len,
+     int *_retval_cbuf_off,
+     int *desc_data_add(offset, _retval_sz)){;}
+
+
+int
+twritep(spdid_t spdid,
+  td_t CD_desc_lookup_CD_tid,
+   int resc_data(tid, cbid),
+   int sz){;}
+
+void
+trelease(spdid_t spdid,
+    td_t CD_desc_data_remove_CD_tid){;}

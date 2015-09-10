@@ -1,0 +1,137 @@
+Downloading/unpacking pycparser
+  Getting page http://pypi.python.org/simple/pycparser
+  URLs to search for versions for pycparser:
+  * http://pypi.python.org/simple/pycparser
+  Analyzing links from page https://pypi.python.org/simple/pycparser/
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.02.zip#md5=e484dcd6702770551c3d6cec1caf8dd8 (from https://pypi.python.org/simple/pycparser/), version: 2.02
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.03.zip#md5=ae975c230d0f5c275ffc278c2a5c8862 (from https://pypi.python.org/simple/pycparser/), version: 2.03
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.04.zip#md5=bc652c2ee023efdd37a67aa92ca88359 (from https://pypi.python.org/simple/pycparser/), version: 2.04
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.05.zip#md5=23eb23b7f14d0361b155f25d67f82be9 (from https://pypi.python.org/simple/pycparser/), version: 2.05
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.06.tar.gz#md5=b6898062ebae1ce52d355ef1039e030e (from https://pypi.python.org/simple/pycparser/), version: 2.06
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.07.tar.gz#md5=985cb5c0d7f357904e7fdff44d31e727 (from https://pypi.python.org/simple/pycparser/), version: 2.07
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.08.tar.gz#md5=923f08a99839b4fac45d2ac395e1ef7e (from https://pypi.python.org/simple/pycparser/), version: 2.08
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.09.1.tar.gz#md5=74aa075fc28b7c24a4426574d1ac91e0 (from https://pypi.python.org/simple/pycparser/), version: 2.09.1
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.09.tar.gz#md5=27b8018a93c11c93f8e845488a593db4 (from https://pypi.python.org/simple/pycparser/), version: 2.09
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.10.tar.gz#md5=d87aed98c8a9f386aa56d365fe4d515f (from https://pypi.python.org/simple/pycparser/), version: 2.10
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.11.tar.gz#md5=8b87f6f121edded09056c165afd12c4e (from https://pypi.python.org/simple/pycparser/), version: 2.11
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.12.tar.gz#md5=debde3e37af8566c95d2c0a0504397e7 (from https://pypi.python.org/simple/pycparser/), version: 2.12
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.13.tar.gz#md5=e4fe1a2d341b22e25da0d22f034ef32f (from https://pypi.python.org/simple/pycparser/), version: 2.13
+    Found link https://pypi.python.org/packages/source/p/pycparser/pycparser-2.14.tar.gz#md5=a2bc8d28c923b4fe2b2c3b4b51a4f935 (from https://pypi.python.org/simple/pycparser/), version: 2.14
+  Using version 2.14 (newest of versions: 2.14, 2.13, 2.12, 2.11, 2.10, 2.09.1, 2.09, 2.08, 2.07, 2.06, 2.05, 2.04, 2.03, 2.02)
+  Downloading from URL https://pypi.python.org/packages/source/p/pycparser/pycparser-2.14.tar.gz#md5=a2bc8d28c923b4fe2b2c3b4b51a4f935 (from https://pypi.python.org/simple/pycparser/)
+  Running setup.py egg_info for package pycparser
+    running egg_info
+    creating pip-egg-info/pycparser.egg-info
+    writing pip-egg-info/pycparser.egg-info/PKG-INFO
+    writing top-level names to pip-egg-info/pycparser.egg-info/top_level.txt
+    writing dependency_links to pip-egg-info/pycparser.egg-info/dependency_links.txt
+    writing manifest file 'pip-egg-info/pycparser.egg-info/SOURCES.txt'
+    warning: manifest_maker: standard file '-c' not found
+    reading manifest file 'pip-egg-info/pycparser.egg-info/SOURCES.txt'
+    reading manifest template 'MANIFEST.in'
+    warning: no previously-included files matching 'yacctab.*' found under directory 'tests'
+    warning: no previously-included files matching 'lextab.*' found under directory 'tests'
+    warning: no previously-included files matching 'yacctab.*' found under directory 'examples'
+    warning: no previously-included files matching 'lextab.*' found under directory 'examples'
+    writing manifest file 'pip-egg-info/pycparser.egg-info/SOURCES.txt'
+  Source in ./build/pycparser has version 2.14, which satisfies requirement pycparser
+Installing collected packages: pycparser
+  Running setup.py install for pycparser
+    Running command /usr/bin/python -c "import setuptools; __file__='/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py'; execfile('/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py')" install --single-version-externally-managed --record /tmp/pip-MB131W-record/install-record.txt --install-headers /home/songjiguo/research/IDL/pycparser-2.14/lib/include
+    running install
+    running build
+    running build_py
+    creating build
+    creating build/lib.linux-i686-2.6
+    creating build/lib.linux-i686-2.6/pycparser
+    copying pycparser/lextab.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/_ast_gen.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/__init__.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/yacctab.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/c_lexer.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/c_generator.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/_build_tables.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/ast_transforms.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/plyparser.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/c_parser.py -> build/lib.linux-i686-2.6/pycparser
+    copying pycparser/c_ast.py -> build/lib.linux-i686-2.6/pycparser
+    creating build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/ply/yacc.py -> build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/ply/lex.py -> build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/ply/__init__.py -> build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/ply/cpp.py -> build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/ply/ctokens.py -> build/lib.linux-i686-2.6/pycparser/ply
+    copying pycparser/_c_ast.cfg -> build/lib.linux-i686-2.6/pycparser
+    running install_lib
+    creating /usr/local/lib/python2.6/dist-packages/pycparser
+    error: could not create '/usr/local/lib/python2.6/dist-packages/pycparser': Permission denied
+    Complete output from command /usr/bin/python -c "import setuptools; __file__='/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py'; execfile('/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py')" install --single-version-externally-managed --record /tmp/pip-MB131W-record/install-record.txt --install-headers /home/songjiguo/research/IDL/pycparser-2.14/lib/include:
+    running install
+
+running build
+
+running build_py
+
+creating build
+
+creating build/lib.linux-i686-2.6
+
+creating build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/lextab.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/_ast_gen.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/__init__.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/yacctab.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/c_lexer.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/c_generator.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/_build_tables.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/ast_transforms.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/plyparser.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/c_parser.py -> build/lib.linux-i686-2.6/pycparser
+
+copying pycparser/c_ast.py -> build/lib.linux-i686-2.6/pycparser
+
+creating build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/ply/yacc.py -> build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/ply/lex.py -> build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/ply/__init__.py -> build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/ply/cpp.py -> build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/ply/ctokens.py -> build/lib.linux-i686-2.6/pycparser/ply
+
+copying pycparser/_c_ast.cfg -> build/lib.linux-i686-2.6/pycparser
+
+running install_lib
+
+creating /usr/local/lib/python2.6/dist-packages/pycparser
+
+error: could not create '/usr/local/lib/python2.6/dist-packages/pycparser': Permission denied
+
+----------------------------------------
+Command /usr/bin/python -c "import setuptools; __file__='/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py'; execfile('/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py')" install --single-version-externally-managed --record /tmp/pip-MB131W-record/install-record.txt --install-headers /home/songjiguo/research/IDL/pycparser-2.14/lib/include failed with error code 1
+Exception information:
+Traceback (most recent call last):
+  File "/usr/lib/python2.6/dist-packages/pip.py", line 252, in main
+    self.run(options, args)
+  File "/usr/lib/python2.6/dist-packages/pip.py", line 410, in run
+    requirement_set.install(install_options)
+  File "/usr/lib/python2.6/dist-packages/pip.py", line 2017, in install
+    requirement.install(install_options)
+  File "/usr/lib/python2.6/dist-packages/pip.py", line 1515, in install
+    cwd=self.source_dir, filter_stdout=self._filter_install, show_stdout=False)
+  File "/usr/lib/python2.6/dist-packages/pip.py", line 3543, in call_subprocess
+    % (command_desc, proc.returncode))
+InstallationError: Command /usr/bin/python -c "import setuptools; __file__='/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py'; execfile('/home/songjiguo/research/IDL/pycparser-2.14/build/pycparser/setup.py')" install --single-version-externally-managed --record /tmp/pip-MB131W-record/install-record.txt --install-headers /home/songjiguo/research/IDL/pycparser-2.14/lib/include failed with error code 1

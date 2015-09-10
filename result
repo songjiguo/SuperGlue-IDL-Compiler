@@ -1,0 +1,285 @@
+# 1 "cidl.h"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "cidl.h"
+
+
+
+# 1 "cidl_gen.h" 1
+
+
+
+typedef int td_t;
+typedef int spdid_t;
+typedef int tor_flags_t;
+typedef int evt_t;
+# 21 "cidl_gen.h"
+typedef int __tuple_desc_close_type_t;
+
+
+
+typedef int __tuple_desc_dep_create_type_t;
+
+
+
+
+typedef int __tuple_desc_dep_close_type_t;
+
+
+
+typedef int __tuple_desc_global_type_t;
+
+
+
+typedef int __tuple_desc_block_type_t;
+
+
+
+typedef int __tuple_desc_data_type_t;
+
+
+
+typedef int __tuple_resc_data_type_t;
+# 5 "cidl.h" 2
+
+
+
+
+
+
+struct __tuple_def_service {
+ __tuple_desc_close_type_t __desc_close_itself;
+ __tuple_desc_dep_create_type_t __desc_dep_create_same;
+ __tuple_desc_dep_close_type_t __desc_dep_close_keep;
+ __tuple_desc_global_type_t __desc_global_false;
+ __tuple_desc_block_type_t __desc_block_true_lock;
+ __tuple_desc_data_type_t __desc_data_true;
+ __tuple_resc_data_type_t __resc_data_true;
+};
+
+
+struct desc_data {
+ td_t tid;
+ int offset;
+
+ td_t parent_tid;
+ char *param;
+ int param_sz;
+ spdid_t spdid;
+ tor_flags_t tflags;
+ evt_t evtid;
+
+ unsigned long long fcounter;
+};
+
+typedef td_t __desc_data_retval_td_t_tid;__desc_data_retval_td_t_tid
+tsplit(spdid_t __desc_data_spdid,
+    td_t __desc_data___parent_desc_parent_tid,
+    char *__desc_data_param,
+    int __desc_data_size_of(len, param),
+    tor_flags_t __desc_data_tflags,
+    evt_t __desc_data_evtid);
+
+int
+treadp(spdid_t spdid,
+    td_t __desc_tid,
+    int len,
+    int *__fn_ret_cbuf_off,
+    int *desc_data_add(__fn_ret_sz, offset));
+
+int
+twritep(spdid_t spdid,
+  td_t __desc_tid,
+  int resc_data_save(cbid, __desc_tid),
+  int *desc_data_add(sz, offset));
+
+typedef void __desc_data_remove_tid;__desc_data_remove_tid
+trelease(spdid_t spdid,
+   td_t __desc_tid);
+ 
+ 
+FileAST: 
+  Typedef: td_t, [], ['typedef']
+    TypeDecl: td_t, []
+      IdentifierType: ['int']
+  Typedef: spdid_t, [], ['typedef']
+    TypeDecl: spdid_t, []
+      IdentifierType: ['int']
+  Typedef: tor_flags_t, [], ['typedef']
+    TypeDecl: tor_flags_t, []
+      IdentifierType: ['int']
+  Typedef: evt_t, [], ['typedef']
+    TypeDecl: evt_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_close_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_close_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_dep_create_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_dep_create_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_dep_close_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_dep_close_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_global_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_global_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_block_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_block_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_desc_data_type_t, [], ['typedef']
+    TypeDecl: __tuple_desc_data_type_t, []
+      IdentifierType: ['int']
+  Typedef: __tuple_resc_data_type_t, [], ['typedef']
+    TypeDecl: __tuple_resc_data_type_t, []
+      IdentifierType: ['int']
+  Decl: None, [], [], []
+    Struct: __tuple_def_service
+      Decl: __desc_close_itself, [], [], []
+        TypeDecl: __desc_close_itself, []
+          IdentifierType: ['__tuple_desc_close_type_t']
+      Decl: __desc_dep_create_same, [], [], []
+        TypeDecl: __desc_dep_create_same, []
+          IdentifierType: ['__tuple_desc_dep_create_type_t']
+      Decl: __desc_dep_close_keep, [], [], []
+        TypeDecl: __desc_dep_close_keep, []
+          IdentifierType: ['__tuple_desc_dep_close_type_t']
+      Decl: __desc_global_false, [], [], []
+        TypeDecl: __desc_global_false, []
+          IdentifierType: ['__tuple_desc_global_type_t']
+      Decl: __desc_block_true_lock, [], [], []
+        TypeDecl: __desc_block_true_lock, []
+          IdentifierType: ['__tuple_desc_block_type_t']
+      Decl: __desc_data_true, [], [], []
+        TypeDecl: __desc_data_true, []
+          IdentifierType: ['__tuple_desc_data_type_t']
+      Decl: __resc_data_true, [], [], []
+        TypeDecl: __resc_data_true, []
+          IdentifierType: ['__tuple_resc_data_type_t']
+  Decl: None, [], [], []
+    Struct: desc_data
+      Decl: tid, [], [], []
+        TypeDecl: tid, []
+          IdentifierType: ['td_t']
+      Decl: offset, [], [], []
+        TypeDecl: offset, []
+          IdentifierType: ['int']
+      Decl: parent_tid, [], [], []
+        TypeDecl: parent_tid, []
+          IdentifierType: ['td_t']
+      Decl: param, [], [], []
+        PtrDecl: []
+          TypeDecl: param, []
+            IdentifierType: ['char']
+      Decl: param_sz, [], [], []
+        TypeDecl: param_sz, []
+          IdentifierType: ['int']
+      Decl: spdid, [], [], []
+        TypeDecl: spdid, []
+          IdentifierType: ['spdid_t']
+      Decl: tflags, [], [], []
+        TypeDecl: tflags, []
+          IdentifierType: ['tor_flags_t']
+      Decl: evtid, [], [], []
+        TypeDecl: evtid, []
+          IdentifierType: ['evt_t']
+      Decl: fcounter, [], [], []
+        TypeDecl: fcounter, []
+          IdentifierType: ['unsigned', 'long', 'long']
+  Typedef: __desc_data_retval_td_t_tid, [], ['typedef']
+    TypeDecl: __desc_data_retval_td_t_tid, []
+      IdentifierType: ['td_t']
+  Decl: tsplit, [], [], []
+    FuncDecl: 
+      ParamList: 
+        Decl: __desc_data_spdid, [], [], []
+          TypeDecl: __desc_data_spdid, []
+            IdentifierType: ['spdid_t']
+        Decl: __desc_data___parent_desc_parent_tid, [], [], []
+          TypeDecl: __desc_data___parent_desc_parent_tid, []
+            IdentifierType: ['td_t']
+        Decl: __desc_data_param, [], [], []
+          PtrDecl: []
+            TypeDecl: __desc_data_param, []
+              IdentifierType: ['char']
+        Decl: __desc_data_size_of, [], [], []
+          FuncDecl: 
+            ParamList: 
+              ID: len
+              ID: param
+            TypeDecl: __desc_data_size_of, []
+              IdentifierType: ['int']
+        Decl: __desc_data_tflags, [], [], []
+          TypeDecl: __desc_data_tflags, []
+            IdentifierType: ['tor_flags_t']
+        Decl: __desc_data_evtid, [], [], []
+          TypeDecl: __desc_data_evtid, []
+            IdentifierType: ['evt_t']
+      TypeDecl: tsplit, []
+        IdentifierType: ['__desc_data_retval_td_t_tid']
+  Decl: treadp, [], [], []
+    FuncDecl: 
+      ParamList: 
+        Decl: spdid, [], [], []
+          TypeDecl: spdid, []
+            IdentifierType: ['spdid_t']
+        Decl: __desc_tid, [], [], []
+          TypeDecl: __desc_tid, []
+            IdentifierType: ['td_t']
+        Decl: len, [], [], []
+          TypeDecl: len, []
+            IdentifierType: ['int']
+        Decl: __fn_ret_cbuf_off, [], [], []
+          PtrDecl: []
+            TypeDecl: __fn_ret_cbuf_off, []
+              IdentifierType: ['int']
+        Decl: desc_data_add, [], [], []
+          FuncDecl: 
+            ParamList: 
+              ID: __fn_ret_sz
+              ID: offset
+            PtrDecl: []
+              TypeDecl: desc_data_add, []
+                IdentifierType: ['int']
+      TypeDecl: treadp, []
+        IdentifierType: ['int']
+  Decl: twritep, [], [], []
+    FuncDecl: 
+      ParamList: 
+        Decl: spdid, [], [], []
+          TypeDecl: spdid, []
+            IdentifierType: ['spdid_t']
+        Decl: __desc_tid, [], [], []
+          TypeDecl: __desc_tid, []
+            IdentifierType: ['td_t']
+        Decl: resc_data_save, [], [], []
+          FuncDecl: 
+            ParamList: 
+              ID: cbid
+              ID: __desc_tid
+            TypeDecl: resc_data_save, []
+              IdentifierType: ['int']
+        Decl: desc_data_add, [], [], []
+          FuncDecl: 
+            ParamList: 
+              ID: sz
+              ID: offset
+            PtrDecl: []
+              TypeDecl: desc_data_add, []
+                IdentifierType: ['int']
+      TypeDecl: twritep, []
+        IdentifierType: ['int']
+  Typedef: __desc_data_remove_tid, [], ['typedef']
+    TypeDecl: __desc_data_remove_tid, []
+      IdentifierType: ['void']
+  Decl: trelease, [], [], []
+    FuncDecl: 
+      ParamList: 
+        Decl: spdid, [], [], []
+          TypeDecl: spdid, []
+            IdentifierType: ['spdid_t']
+        Decl: __desc_tid, [], [], []
+          TypeDecl: __desc_tid, []
+            IdentifierType: ['td_t']
+      TypeDecl: trelease, []
+        IdentifierType: ['__desc_data_remove_tid']
+

@@ -1,0 +1,12 @@
+# 1 "cos_idl.h"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "cos_idl.h"
+# 87 "cos_idl.h"
+int foo(int spd, int COS_IDL_PARA_PARENT_DESC_par1, int par2);
+
+void test()
+{
+ { printf("block1\n"); };
+ printf("three args: %d\n", 3);
+}
