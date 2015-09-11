@@ -10,15 +10,10 @@
 from __future__ import print_function
 from pycparser import parse_file, preprocess_file
 from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
-from c3_parser import print_logo
 from pprint import pprint
-from keywords import printc
 
-import keywords, predicates
-import copy
+import keywords
 import subprocess
-from reportlab.pdfbase.pdfform import GLOBALFONTSDICTIONARY
-from pydoc import describe
 
 class MyCode():
     def __init__(self):
@@ -57,7 +52,10 @@ class BlockCode(object):
 
     def show_code(self):
         print (self.block_code)  
-        
+
+########################
+##  utils
+########################        
 def traverse(o, tree_types=(list, tuple)):
     if isinstance(o, tree_types):
         for value in o:
@@ -66,242 +64,50 @@ def traverse(o, tree_types=(list, tuple)):
     else:
         yield o
         
+
+def replace_params(name, params, code):
+    param_list = []
+    paramdecl_list = []
+    for para in params:               # fdesc[1] is the list of normal parameters
+        param_list.append(para[1])      # para[0] is the type, para[1] is the value
+        paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
+    code = code.replace("params", ', '.join(param_list))
+    code = code.replace("par_sz", str(len(param_list)))
+    code = code.replace("parsdecl", ', '.join(paramdecl_list))
+    code = code.replace("fname", name)
+    
+    return code
+
 ########################
-##  blocks
-########################
-
-def block_cli_if_save_data():
-    #print ("[[BLOCK_CLI_IF_SAVE_DATA]]")
-    BLOCK_CLI_IF_SAVE_DATA = keywords.IDLBlock()
+## constructing blocks
+######################## 
+def construct_blocks(globalblocks, funcblocks):
     
-    pred = ["desc_has_data_true"]
-    code = "save_data(id, data);\n" \
-
-    BLOCK_CLI_IF_SAVE_DATA.add_blk(pred, code, "BLOCK_CLI_IF_SAVE_DATA")
+    # transform the predefine code for further processing (e.g., add "\n")
+    cmd = 'sed -f pred\_code\/convert.sed pred\_code\/code.c > pred\_code\/tmpcode'
+    subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     
-    return BLOCK_CLI_IF_SAVE_DATA
-
-def block_cli_if_rec_data():
-    #print ("[[BLOCK_CLI_IF_REC_DATA]]")
-    BLOCK_CLI_IF_REC_DATA = keywords.IDLBlock()
+    fblk = []
+    gblk = []
     
-    pred = ["resc_has_data_true"]
-    code = "assert(desc);\n" \
-"data = introspect_data(desc->id);\n" \
-"\n" \
-"assert(data);\n" \
-"restore_data(data);\n" \
+    fblk.append(keywords.block_cli_if_invoke())
+    fblk.append(keywords.block_cli_if_invoke_ser_intro())
+    fblk.append(keywords.block_cli_if_recover_subtree())
+    fblk.append(keywords.block_cli_if_track())  
+    fblk.append(keywords.block_cli_if_recover_init())
 
-    BLOCK_CLI_IF_REC_DATA.add_blk(pred, code, "BLOCK_CLI_IF_REC_DATA")
-    
-    return BLOCK_CLI_IF_REC_DATA
+    gblk.append(keywords.block_cli_if_recover())
+    gblk.append(keywords.block_cli_if_basic_id()) 
+    gblk.append(keywords.block_cli_if_recover_upcall()) 
+    gblk.append(keywords.block_cli_if_recover_data())
+    gblk.append(keywords.block_cli_if_save_data())
+    gblk.append(keywords.block_cli_if_recover_upcall_entry())  
 
-def block_cli_if_rec_init():
-   #print ("[[BLOCK_CLI_IF_REC_INIT]]")
-    BLOCK_CLI_IF_REC_INIT = keywords.IDLBlock()
-    
-    pred = ["create"]
-    code = "assert(desc);\n" \
-"func_name(desc->saved_params);\n" \
-
-    BLOCK_CLI_IF_REC_INIT.add_blk(pred, code, "BLOCK_CLI_IF_REC_INIT")
-    
-    return BLOCK_CLI_IF_REC_INIT
-   
-def block_cli_if_track():
-    #print ("[[BLOCK_CLI_IF_TRACK]]")    
-    BLOCK_CLI_IF_TRACK = keywords.IDLBlock()
-    
-    pred = ["create"]
-    code = "desc = desc_alloc(ret);\n" \
-"assert(desc);\n" \
-"\n" \
-"desc_save(desc, ret, params);\n" \
-
-    BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
-        
-    pred = ["desc_dep_close_remove",
-            "terminate"]
-    code = "assert(desc);\n" \
-"desc_dealloc(desc);\n" \
-
-    BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
-    
-    pred = ["desc_dep_close_keep",
-            "terminate"]
-    code = "assert(desc);\n" \
-"\n" \
-"child_desc_list = desc->child_desc_list;\n" \
-"if (EMPTY_LIST(child_desc_list)) {\n" \
-"    desc_dealloc(desc);\n" \
-"}\n" \
-
-    BLOCK_CLI_IF_TRACK.add_blk(pred, code, "BLOCK_CLI_IF_TRACK")
-    
-    return BLOCK_CLI_IF_TRACK              
-            
-
-def block_cli_if_recover_subtree():
-    #print ("[[BLOCK_CLI_IF_RECOVER_SUBTREE]]")
-    BLOCK_CLI_IF_RECOVER_SUBTREE = keywords.IDLBlock()
-    
-    pred = ["desc_close_subtree", 
-            "desc_create_diff",
-            "terminate"]
-    code = "assert(id);\n" \
-"desc = desc_lookup(id);\n" \
-"assert(desc);\n" \
-"\n" \
-"child_desc_list = desc->child_desc_list;\n" \
-"\n" \
-"for ((child_desc) = FIRST_LIST((child_desc_list), next, prev) ;      \n" \
-"     (child_desc) != (child_desc_list) ;\n" \
-"     (child_desc) = FIRST_LIST((child_desc), next, prev)) {\n" \
-"    client_interface_basic_id(child_desc->id);\n" \
-"    if (child_desc->dest_spd != cos_spd_id()) {\n" \
-"        recover_upcall(child_desc->dest_spd, child_desc->id);\n" \
-"    } else {\n" \
-"        id = child_desc->id;\n" \
-"        client_interface_recover_subtree(id);\n" \
-"    }\n" \
-"}\n" \
-    
-    BLOCK_CLI_IF_RECOVER_SUBTREE.add_blk(pred, code, "BLOCK_CLI_IF_RECOVER_SUBTREE")
-         
-    return BLOCK_CLI_IF_RECOVER_SUBTREE
-
-def block_cli_if_recover_upcall():
-    #print ("[[BLOCK_CLI_IF_RECOVER_UPCALL]]")
-    BLOCK_CLI_IF_RECOVER_UPCALL = keywords.IDLBlock()
-    
-    pred = ["desc_global_global"] 
-    code = "assert(id);\n" \
-"client_interface_recover(id);\n" \
-"client_interface_recover_subtree(id);\n" \
-    
-    BLOCK_CLI_IF_RECOVER_UPCALL.add_blk(pred, code, "BLOCK_CLI_IF_RECOVER_UPCALL")
-         
-    return BLOCK_CLI_IF_RECOVER_UPCALL
-
-def block_cli_if_basic_id():
-    #print ("[[BLOCK_CLI_IF_BASIC_ID]]")
-    BLOCK_CLI_IF_BASIC_ID = keywords.IDLBlock()
-    
-    pred = ["desc_dep_create_same"] 
-    code = "assert(id);\n" \
-"desc = desc_lookup(id);\n" \
-"assert(desc);\n" \
-"\n" \
-"ret = client_interface_recover_init();\n" \
-"\n" \
-"if (ret == parent_not_recovered_error) {\n" \
-"    id = desc->parent_id;\n" \
-"    client_interface_recover(id);\n" \
-"}\n" \
-
-    BLOCK_CLI_IF_BASIC_ID.add_blk(pred, code, "BLOCK_CLI_IF_BASIC_ID")
-
-    pred = ["desc_create_single"] 
-    code = "assert(id);\n" \
-"desc = desc_lookup(id);\n" \
-"assert(desc);\n" \
-"\n" \
-"ret = client_interface_recover_init();\n" \
-"client_interface_recover_data();\n" \
-    
-    BLOCK_CLI_IF_BASIC_ID.add_blk(pred, code, "BLOCK_CLI_IF_BASIC_ID")
-         
-    return BLOCK_CLI_IF_BASIC_ID
-        
-def block_cli_if_recover():
-    #print ("[[BLOCK_CLI_IF_RECOVER]]")
-    BLOCK_CLI_IF_RECOVER = keywords.IDLBlock()
-    
-    pred = ["desc_global_global"] 
-    code = "spdid_t creater_component;\n" \
-"\n" \
-"assert(id);\n" \
-"creater_component = introspect_creator(id);\n" \
-"assert(creater_component);\n" \
-"\n" \
-"if (creater_component != cos_spd_id()) {\n" \
-"    recover_upcall(creater_component, id);\n" \
-"} else {\n" \
-"    client_interface_basic_id(id);\n" \
-"}\n" \
-
-    BLOCK_CLI_IF_RECOVER.add_blk(pred, code, "BLOCK_CLI_IF_RECOVER")
-
-    pred = ["desc_local"] 
-    code = "client_interface_basic_id(id);\n" \
-
-    BLOCK_CLI_IF_RECOVER.add_blk(pred, code, "BLOCK_CLI_IF_RECOVER")
-         
-    return BLOCK_CLI_IF_RECOVER
-                
-
-def block_cli_if_invoke_ser_intro():
-    #print ("[[BLOCK_CLI_IF_INVOKE_SER_INTRO]]")
-    BLOCK_CLI_IF_INVOKE_SER_INTRO = keywords.IDLBlock()
-    
-    pred = [] 
-    code  = "CSTUB_INVOKE(ret, fault, uc, par_sz, params)\n" \
-"\n" \
-"if (!desc) {   // some error\n" \
-"    client_interface_recover();\n" \
-"    CSTUB_INVOKE(ret, fault, uc, par_sz, params)\n" \
-"}\n" \
-
-    BLOCK_CLI_IF_INVOKE_SER_INTRO.add_blk(pred, code, "BLOCK_CLI_IF_INVOKE_SER_INTRO")
-         
-    return BLOCK_CLI_IF_INVOKE_SER_INTRO
-        
-      
-def block_cli_if_invoke():
-    #print ("[[BLOCK_CLI_IF_INVOKE]]")
-    BLOCK_CLI_IF_INVOKE = keywords.IDLBlock()
-    
-    pred = ["desc_dep_create_same|desc_dep_create_diff",
-            "create"]
-    code =  "if (parent_desc = desc_lookup(id)) { \n"   \
-            "    id = paren_desc.server_id; \n"         \
-            "}\n"                                       \
-            "invoke_ser_intro(); \n"                    
-                        
-    BLOCK_CLI_IF_INVOKE.add_blk(pred, code, "BLOCK_CLI_IF_INVOKE")
-    
-    
-    pred = ["desc_dep_create_single",
-            "create"]
-    code =  "CSTUB_INVOKE(ret, fault, uc, par_sz, params)\n"    
-    BLOCK_CLI_IF_INVOKE.add_blk(pred, code, "BLOCK_CLI_IF_INVOKE")
-
-    # TODO: automatically generate these code
-    #===========================================================================
-    # p = subprocess.Popen(['sed -f convert.sed pred_code/code_tmplate.c'], shell=True, stdout=subprocess.PIPE)
-    # code, err = p.communicate()
-    # print (code)
-    # p = subprocess.Popen(['sed  \'1d;$d\' pred_code/block_cli_if_invoke.c'], shell=True, stdout=subprocess.PIPE)
-    # pred, err = p.communicate()
-    # print (pred)    
-    #===========================================================================
-
-    pred = ["mutate|terminate"]
-    code =  "if (desc = desc_lookup(id)) {\n" \
-"    if (desc->fcnt != global_fault_cnt) {\n" \
-"        desc->fault_cnt = global_fault_cnt;\n" \
-"        client_interface_recover();\n" \
-"        client_interface_recover_subtree();\n" \
-"    }\n" \
-"    update_id(id, desc->server_id);\n" \
-"    CSTUB_INVOKE(ret, fault, uc, par_sz, params);\n" \
-"} else {\n" \
-"    invoke_ser_intro();\n" \
-"}\n" \
-    
-    BLOCK_CLI_IF_INVOKE.add_blk(pred, code, "BLOCK_CLI_IF_INVOKE")    
-    return BLOCK_CLI_IF_INVOKE          
-
+    for item in gblk:
+        globalblocks.append(item)          
+    for item in fblk:
+        funcblocks.append(item) 
+     
 #===============================================================================
 #  block is in the form of (predicate, code)
 #  gdescp is in the form of ['desc_close_itself', 'desc_global_global', ...]
@@ -309,27 +115,6 @@ def block_cli_if_invoke():
 #
 #  This is the evaluation function and return the code for a match
 #===============================================================================   
-def construct_blocks(globalblocks, funcblocks):
-    fblk = []
-    gblk = []
-    
-    fblk.append(block_cli_if_invoke())
-    fblk.append(block_cli_if_invoke_ser_intro())
-    fblk.append(block_cli_if_recover_subtree())
-    fblk.append(block_cli_if_track())
-    fblk.append(block_cli_if_rec_init())
-       
-    gblk.append(block_cli_if_recover())
-    gblk.append(block_cli_if_basic_id())
-    gblk.append(block_cli_if_recover_upcall())
-    gblk.append(block_cli_if_rec_data())
-    gblk.append(block_cli_if_save_data())  
-
-    for item in gblk:
-        globalblocks.append(item)          
-    for item in fblk:
-        funcblocks.append(item) 
-
      
 def ast_eval(block, (gdescp, fdescp)):
     #print ("\n <<<<<<< eval starts! >>>>>>>>")
@@ -349,24 +134,22 @@ def ast_eval(block, (gdescp, fdescp)):
         match = 0;
         for pred in list_blks:
             pred = pred.split('|')
-            #===================================================================
-            # print ("a pred: --> ")
-            # print (pred)
-            # print (list_descp)
-            #===================================================================
+            #print ("a pred: --> ")
+            #print (pred)
+            #print (list_descp)
             for desc in list_descp:
                 if (desc in pred):
                     match = match + 1;
         if (match == len(list_blks)):
             #print ("found a match")
-            IFCode = blk[1]
-            IFBlkName = blk[2]
+            IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
+            IFBlkName = blk[2]            
             
             break;  # TODO: check the consistency
     
     return (IFBlkName, IFCode)
     #print ("<<<<<<< eval ends! >>>>>>>>\n")
-     
+        
 #===============================================================================
 # This is the main function to generate new AST 
 #===============================================================================
@@ -436,12 +219,8 @@ def idl_generate(result, parsed_ast):
         __IFcode = {}        
         for fblk in funcblocks:
             #fblk.show()
-            name, code = ast_eval(fblk, (IFDesc[0], fdesc))
-            param_list = []
-            for para in fdesc[1]:
-                param_list.append(para[1])    # para[0] is the type, para[1] is the value
-            code = code.replace("params", ', '.join(param_list))
-            code = code.replace("par_sz", str(len(param_list)))
+            name, code = ast_eval(fblk, (IFDesc[0], fdesc))            
+            code = replace_params(fdesc[0], fdesc[1], code)                       
             if (name and code):
                 __IFcode[name] = code            
         #=======================================================================
@@ -455,7 +234,6 @@ def idl_generate(result, parsed_ast):
     #pprint (IFcode)
     print ()
     
-    
     for kname, vdict in IFcode.iteritems():
         print ("**********************")
         print (kname)
@@ -464,4 +242,4 @@ def idl_generate(result, parsed_ast):
             print ("******")
             print (blkname)
             print (blkcode)
-             
+    

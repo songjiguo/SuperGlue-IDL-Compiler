@@ -12,6 +12,7 @@
 #==============================================================================
 
 from pprint import pprint
+import subprocess
 
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
@@ -83,6 +84,134 @@ class IDLFunction():
         init_func_info(self)
         
         self.normal_para = []
+        
+########################
+##  blocks
+########################
+
+def build_blk_code(blknode, blkname):
+    
+    tmp = blkname.lower()
+    blkstr = tmp.replace("_", "\_")
+    i = 1
+    while(i < 10):   # max 10 different (pred, code)
+        cmd = 'sed -nr \"/\<'+ blkstr +' pred '+str(i)+' start\>/{:a;n;/'\
+              '\<'+ blkstr +' pred '+str(i)+' end\>/b;p;ba} \" pred\_code\/tmpcode'
+        p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+        pred, err = p.communicate() 
+        pred = pred.replace("\\n\" \\", "\"")        # extract pred
+        if not pred:
+            break;
+        #print(pred)
+        cmd = 'sed -nr \"/\<'+ blkstr +' '+str(i)+' start\>/{:a;n;/'\
+              '\<'+ blkstr +' '+str(i)+' end\>/b;p;ba} \" pred\_code\/tmpcode'
+        p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+        code, err = p.communicate()
+        if not code:
+            break;
+        #print (code)
+        
+        preds = pred.split()
+        if (preds == ['""']):
+            blknode.add_blk([], code, blkname)
+        else:
+            blknode.add_blk(preds, code, blkname)    
+
+        i = i+1
+
+    cmd = 'sed -nr \"/\<'+ blkstr +' no match start\>/{:a;n;/'\
+          '\<'+ blkstr +' no match end\>/b;p;ba} \" pred\_code\/tmpcode'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    #print (code)
+    pred = ["nomatch"]  
+    blknode.add_blk(pred, code, blkname)
+    
+    cmd = 'sed -nr \"/\<'+ blkstr +' func pointer start\>/{:a;n;/'\
+          '\<'+ blkstr +' func pointer end\>/b;p;ba} \" pred\_code\/tmpcode'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    #print (code)
+    pred = ["fnptr"]  
+    blknode.add_blk(pred, code, blkname)
+
+def block_cli_if_recover_upcall_entry():
+    BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY, "BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY")
+    #pprint (BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY       
+    
+def block_cli_if_save_data():
+    BLOCK_CLI_IF_SAVE_DATA = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_SAVE_DATA, "BLOCK_CLI_IF_SAVE_DATA")
+    #pprint (BLOCK_CLI_IF_SAVE_DATA.list)
+    #print ("")
+    return BLOCK_CLI_IF_SAVE_DATA       
+    
+def block_cli_if_recover_data():
+    BLOCK_CLI_IF_RECOVER_DATA = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_DATA, "BLOCK_CLI_IF_RECOVER_DATA")
+    #pprint (BLOCK_CLI_IF_RECOVER_DATA.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER_DATA       
+       
+def block_cli_if_recover_init():
+    BLOCK_CLI_IF_RECOVER_INIT = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_INIT, "BLOCK_CLI_IF_RECOVER_INIT")
+    #pprint (BLOCK_CLI_IF_RECOVER_INIT.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER_INIT        
+       
+def block_cli_if_track():
+    BLOCK_CLI_IF_TRACK = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_TRACK, "BLOCK_CLI_IF_TRACK")
+    #pprint (BLOCK_CLI_IF_TRACK.list)
+    #print ("")
+    return BLOCK_CLI_IF_TRACK    
+            
+def block_cli_if_recover_subtree():
+    BLOCK_CLI_IF_RECOVER_SUBTREE = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_SUBTREE, "BLOCK_CLI_IF_RECOVER_SUBTREE")
+    #pprint (BLOCK_CLI_IF_RECOVER_SUBTREE.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER_SUBTREE    
+
+def block_cli_if_recover_upcall():
+    BLOCK_CLI_IF_RECOVER_UPCALL = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL, "BLOCK_CLI_IF_RECOVER_UPCALL")
+    #pprint (BLOCK_CLI_IF_RECOVER_UPCALL.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER_UPCALL
+    
+def block_cli_if_basic_id():
+    BLOCK_CLI_IF_BASIC_ID = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_BASIC_ID, "BLOCK_CLI_IF_BASIC_ID")
+    #pprint (BLOCK_CLI_IF_BASIC_ID.list)
+    #print ("")
+    return BLOCK_CLI_IF_BASIC_ID
+            
+def block_cli_if_recover():
+    BLOCK_CLI_IF_RECOVER = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER, "BLOCK_CLI_IF_RECOVER")
+    #pprint (BLOCK_CLI_IF_RECOVER.list)
+    #print ("")
+    return BLOCK_CLI_IF_RECOVER    
+
+def block_cli_if_invoke_ser_intro():
+    BLOCK_CLI_IF_INVOKE_SER_INTRO = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_INVOKE_SER_INTRO, "BLOCK_CLI_IF_INVOKE_SER_INTRO")
+    #pprint (BLOCK_CLI_IF_INVOKE_SER_INTRO.list)
+    #print ("")
+    return BLOCK_CLI_IF_INVOKE_SER_INTRO
+
+def block_cli_if_invoke():
+    BLOCK_CLI_IF_INVOKE = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_INVOKE, "BLOCK_CLI_IF_INVOKE")
+    #pprint (BLOCK_CLI_IF_INVOKE.list)
+    #print ("")
+    return BLOCK_CLI_IF_INVOKE
+
 
 def init_function_keyword(node):
     node.name                    = "funcname"

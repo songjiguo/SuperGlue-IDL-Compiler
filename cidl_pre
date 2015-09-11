@@ -29,7 +29,7 @@ struct service_tuple {
  int TP_desc_close_TP_itself;
  int TP_desc_dep_create_TP_same;
  int TP_desc_dep_close_TP_keep;
- int TP_desc_global_TP_global;
+ int TP_desc_global_TP_false;
  int TP_desc_block_TP_true_TP_lock_component;
  int TP_desc_has_data_TP_true;
  int TP_resc_has_data_TP_true;

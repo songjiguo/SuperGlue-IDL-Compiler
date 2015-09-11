@@ -31,7 +31,7 @@ struct service_tuple {
 	desc_close(itself);
 	desc_dep_create(same);
 	desc_dep_close(keep);
-	desc_global(global);
+	desc_global(false);
 	desc_block(true, lock_component);
 	desc_has_data(true);
 	resc_has_data(true);
