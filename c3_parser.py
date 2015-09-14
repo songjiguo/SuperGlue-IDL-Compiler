@@ -38,9 +38,17 @@ from pycparser import c_parser, c_ast, c_generator
 sys.path.extend(['.', '..'])
 
 import c3_gen, keywords
+from pprint import pprint
+
+            #get_desc_track_struct(result, node);
 
 idl_parse_func_result = []  # global string to save parsed func info
 idl_parse_tuple_result = []  # global string to save parsed tuple info
+
+class GlobalVarsVisitor(c_ast.NodeVisitor):
+    def visit_Struct(self, node):
+        global result
+        parse_globalvars_info(result.gvars, node)
 
 class StructVisitor(c_ast.NodeVisitor):
     def visit_Struct(self, node):
@@ -49,8 +57,9 @@ class StructVisitor(c_ast.NodeVisitor):
         ret = parse_structure_info('TP', node.decls)
         if (ret == -1):
             result.tuple.pop()  # this must be some other normal structure
-            return
+            return ret
         parse_structure_info('SM', node.decls)
+
         # debug
         #if not result.tuple[-1].info[result.tuple[-1].desc_close]:
         #    return            
@@ -195,19 +204,6 @@ def find_in_string(target_str, str):
         return None
     return match.string[match.start(1):match.end(1)]    
 
-def parse_structure_info(pattern, struct):
-        for field in struct:
-            tmp = parse_idl_str(pattern, field.name)
-            if not tmp[0]:
-                return -1
-            tmp_tup = result.tuple[-1]
-            tmp_tup_info = tmp_tup.info
-            if not tmp_tup_info[tmp[0]]:
-                tmp_tup_info[tmp[0]] = tmp[-1]
-            else:
-                tmp_tup_info[tmp[0]] = [tmp_tup_info[tmp[0]], tmp[-1]]
-        return 1
-
 def parse_idl_str(delimiter, mystr):
     ret = []    
 
@@ -223,42 +219,7 @@ def parse_idl_str(delimiter, mystr):
         last_str = last_str[1:]
     ret.append(last_str)    
     return ret
-       
-def parse_parameters(decl_func_node):
-        func_params = parse_idl_str('CD', decl_func_node.name)
-        #print (func_params)
-        if (not func_params[0]):
-            func_params[0] = decl_func_node.name  # normal para 
-        if(func_params == ['']):
-            print ("no para to save")
-            
-        param_str = get_class_name(decl_func_node.type)
-        if (param_str == keywords.ptrdecl):
-            func_params.append(get_type_name(decl_func_node)[0]+" *")
-        if (param_str == keywords.typedecl):
-            func_params.append(decl_func_node.type.type.names[0])
-        if (param_str == keywords.funcdecl):
-            for param_funcdecl in decl_func_node.type.args.params:
-                #===============================================================
-                # tmp = parse_idl_str('CD', param_funcdecl.name)
-                # if (tmp):
-                #     func_params.append(tmp[-1])
-                # else:
-                #     func_params.append(param_funcdecl.name)
-                #===============================================================
-                func_params.append(param_funcdecl.name)
-                
-            sub_return = get_class_name(decl_func_node.type.type)
-            if (sub_return == keywords.ptrdecl):
-                ret_tp = decl_func_node.type.type.type.type.names
-                ret_tp[0] = ret_tp[0]+" *"
-            if (sub_return == keywords.typedecl):    
-                ret_tp = decl_func_node.type.type.type.names                    
-            func_params.append(ret_tp[0])                
 
-        func_params.append(param_str)  # add pycparser type
-        return func_params
-    
 def set_sm_state(func_name):
     # get the state info from the tuple structure here (easier)
     #tmp_fun_info[tmp_fun.sm_state] = result.tuple[-1].info[]
@@ -272,55 +233,129 @@ def set_sm_state(func_name):
                     break
         elif (tmp_v == func_name):
             tmp_fun_info[tmp_fun.sm_state] = tmp_k
-            break;        
+            break;   
+        
+#***************************             
+#***************************
+#** IDL parsing functions **
+#***************************
+#***************************
+def parse_globalvars_info(gvars_list, node):
+    # tuple needs to be processed differently 
+    if (node.name == "service_tuple"):
+        return        
+    #node.show()
+    tmp = []
+    for field in node.decls:
+        #print (field.name)
+        #print (field.type.type.names)
+        param_str = get_class_name(field.type)
+        #print (param_str)
+        if (param_str == keywords.ptrdecl):
+            tmp_str = ' '.join(field.type.type.type.names)+" *"
+        elif (param_str == keywords.typedecl):
+            tmp_str = ' '.join(field.type.type.names)
+        elif (param_str == keywords.funcdecl):
+            print ("Not defined yet!")  
+        #print (tmp_str)
+        tmp.append(tmp_str + " " + field.name)
+    gvars_list[node.name] = tmp
+    
+def parse_structure_info(pattern, struct):
+    for field in struct:
+        tmp = parse_idl_str(pattern, field.name)
+        if not tmp[0]:
+            return -1
+        tmp_tup = result.tuple[-1]
+        tmp_tup_info = tmp_tup.info
+        if not tmp_tup_info[tmp[0]]:
+            tmp_tup_info[tmp[0]] = tmp[-1]
+        else:
+            tmp_tup_info[tmp[0]] = [tmp_tup_info[tmp[0]], tmp[-1]]
+    return 1
+   
+def parse_parameters(decl_func_node):
+    func_params = parse_idl_str('CD', decl_func_node.name)
+    #print (func_params)
+    if (not func_params[0]):
+        func_params[0] = decl_func_node.name  # normal para 
+    if(func_params == ['']):
+        print ("no para to save")
+        
+    param_str = get_class_name(decl_func_node.type)
+    if (param_str == keywords.ptrdecl):
+        func_params.append(get_type_name(decl_func_node)[0]+" *")
+    if (param_str == keywords.typedecl):
+        func_params.append(decl_func_node.type.type.names[0])
+    if (param_str == keywords.funcdecl):
+        for param_funcdecl in decl_func_node.type.args.params:
+            #===============================================================
+            # tmp = parse_idl_str('CD', param_funcdecl.name)
+            # if (tmp):
+            #     func_params.append(tmp[-1])
+            # else:
+            #     func_params.append(param_funcdecl.name)
+            #===============================================================
+            func_params.append(param_funcdecl.name)
             
+        sub_return = get_class_name(decl_func_node.type.type)
+        if (sub_return == keywords.ptrdecl):
+            ret_tp = decl_func_node.type.type.type.type.names
+            ret_tp[0] = ret_tp[0]+" *"
+        if (sub_return == keywords.typedecl):    
+            ret_tp = decl_func_node.type.type.type.names                    
+        func_params.append(ret_tp[0])                
+
+    func_params.append(param_str)  # add pycparser type
+    return func_params
+
 def parse_func(node, mytype):
-        global idl_parse_result 
+    global idl_parse_result 
+       
+    func_params = [] 
+              
+    if (mytype == "funcdecl"):               
+        decl = node
+    if (mytype == "funcdef"):               
+        decl = node.decl
+
+    ##### begin of a function #####
         
-        func_params = [] 
-               
-        if (mytype == "funcdecl"):               
-            decl = node
-        if (mytype == "funcdef"):               
-            decl = node.decl
- 
-        ##### begin of a function #####
-         
-        tmp_fun = result.tuple[-1].functions[-1]
-        tmp_fun_info = result.tuple[-1].functions[-1].info
-        tmp_fun_info[tmp_fun.name] = decl.type.declname
-        
-        set_sm_state(decl.type.declname)
-                 
-        #### parameters of a function #####
-        for param_decl in decl.args.params:
-            func_params = parse_parameters(param_decl)
-            #print (func_params[0])
-            # swap the type and value for para (last one is the pycparser type)
-            tmp = func_params[-2]
-            func_params[-2] = func_params[-3]
-            func_params[-3] = tmp
-            
-            # for any parameter
-            result.tuple[-1].functions[-1].normal_para.append((func_params[-3], func_params[-2]))
-            
-            # if there is a match 
-            if (func_params[0] in result.tuple[-1].functions[-1].info):
-                if isinstance(result.tuple[-1].functions[-1].info[func_params[0]], basestring):
-                    print (">>>>>  " + func_params[0])
-                    result.tuple[-1].functions[-1].info[func_params[0]] = func_params[1:]
-                elif isinstance(result.tuple[-1].functions[-1].info[func_params[0]], list):
-                    result.tuple[-1].functions[-1].info[func_params[0]].append(func_params[1:])
+    tmp_fun = result.tuple[-1].functions[-1]
+    tmp_fun_info = result.tuple[-1].functions[-1].info
+    tmp_fun_info[tmp_fun.name] = decl.type.declname
+       
+    set_sm_state(decl.type.declname)
+                
+    #### parameters of a function #####
+    for param_decl in decl.args.params:
+        func_params = parse_parameters(param_decl)
+        #print (func_params[0])
+        # swap the type and value for para (last one is the pycparser type)
+        tmp = func_params[-2]
+        func_params[-2] = func_params[-3]
+        func_params[-3] = tmp
            
-        #### return of a function ####        
-        func_return = parse_idl_str('CD', str(get_dec_type_name(decl)[0]))
-        if (not func_return[0]):
-            if (mytype == "funcdecl"):
-                func_return[0] = decl.type.type.names[0]
-            if (mytype == "funcdef"):
-                func_return[0] = decl.type.type.type.names[0]
-        result.tuple[-1].functions[-1].info[func_return[0]] = func_return[1:]
-        #print (result.tuple[-1].functions[-1].normal_para)
+        # for any parameter
+        result.tuple[-1].functions[-1].normal_para.append((func_params[-3], func_params[-2]))
+           
+        # if there is a match 
+        if (func_params[0] in result.tuple[-1].functions[-1].info):
+            if isinstance(result.tuple[-1].functions[-1].info[func_params[0]], basestring):
+                print (">>>>>  " + func_params[0])
+                result.tuple[-1].functions[-1].info[func_params[0]] = func_params[1:]
+            elif isinstance(result.tuple[-1].functions[-1].info[func_params[0]], list):
+                result.tuple[-1].functions[-1].info[func_params[0]].append(func_params[1:])
+          
+    #### return of a function ####        
+    func_return = parse_idl_str('CD', str(get_dec_type_name(decl)[0]))
+    if (not func_return[0]):
+        if (mytype == "funcdecl"):
+            func_return[0] = decl.type.type.names[0]
+        if (mytype == "funcdef"):
+            func_return[0] = decl.type.type.type.names[0]
+    result.tuple[-1].functions[-1].info[func_return[0]] = func_return[1:]
+    #print (result.tuple[-1].functions[-1].normal_para)
  
 def parse_func_decl(ast):
     v = FuncDeclVisitor()
@@ -334,6 +369,10 @@ def parse_tuple(ast):
     v = StructVisitor()
     v.visit(ast) 
     
+def parse_global_vars(ast):
+    v = GlobalVarsVisitor()
+    v.visit(ast)
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
@@ -354,6 +393,12 @@ if __name__ == "__main__":
     result = keywords.IDLServices()
     parse_tuple(ast)
     parse_func_decl(ast)
+    parse_global_vars(ast)
+  
+    #pprint (result.tuple[0].info)
+    #pprint (result.tuple[0].functions[0].info)
+    #pprint (result.gvars)
+    #exit()
   
     c3_gen.idl_generate(result, ast)
     

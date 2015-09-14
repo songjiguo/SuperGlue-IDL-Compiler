@@ -42,23 +42,27 @@ struct service_tuple {
 	sm_mutate(twritep);
 };
 
+/* note: the name of the functoin parameters must be consistent */
 struct desc_data {
-	td_t tid;
-	int offset;
+	td_t id;
+	td_t server_id;
 	
-	td_t parent_tid;
+	td_t parent_id;
 	char *param;
 	int param_sz;
 	spdid_t spdid;
 	tor_flags_t tflags;
 	evt_t evtid;
+	
+	int offset;	
+	unsigned long long fault_cnt;
 };
 
 desc_data_retval(td_t, tid)
 tsplit(spdid_t desc_data(spdid),
 	   td_t desc_data(parent_desc(parent_tid)),
 	   char *desc_data(param),
-	   int desc_data(size_of(param, len)),
+	   int desc_data(size_of(param, param_sz)),
 	   tor_flags_t desc_data(tflags),
 	   evt_t desc_data(evtid));
 	   
