@@ -38,7 +38,7 @@ create
 static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 	struct desc_track *parent_desc = NULL;
 	if ((parent_desc = call_desc_lookup(IDL_parent_id))) {
-		IDL_parent_id = parent_desc->IDL_server_id;
+		IDL_parent_id = parent_desc->server_id;
 	}
 	
 	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
@@ -71,7 +71,7 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 			block_cli_if_recover(IDL_id);
 			block_cli_if_recover_subtree(IDL_id);
 		}
-		call_update_id(IDL_id, desc->IDL_server_id);
+		call_update_id(IDL_id, desc->server_id);
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
 	} else {  // could be created in different component
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
@@ -145,7 +145,7 @@ static inline void block_cli_if_basic_id(int id) {
 		id = desc->IDL_parent_id;
 		block_cli_if_recover(id);
 	} else {
-		desc->IDL_server_id = retval;	
+		desc->server_id = retval;	
 	}
 	
 	block_cli_if_recover_data(desc);
@@ -163,7 +163,7 @@ static inline void block_cli_if_basic_id(int id) {
 	assert(desc);
 	
 	int retval = 0;
-	desc->IDL_server_id = IDL_fname(IDL_desc_saved_params);
+	desc->server_id = IDL_fname(IDL_desc_saved_params);
 	block_cli_if_recover_data)(desc);
 }
 // block_cli_if_basic_id 2 end

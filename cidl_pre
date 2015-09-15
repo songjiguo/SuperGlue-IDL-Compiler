@@ -5,14 +5,33 @@
 
 
 
-
-
-
-
 # 1 "cidl_gen.h" 1
 
 
 
+enum {
+ false,
+ true,
+ itself,
+ same,
+ kepp,
+ create,
+ mutate,
+ terminate
+};
+
+typedef int desc_close;
+typedef int desc_dep_create;
+typedef int desc_dep_close;
+typedef int desc_global;
+typedef int desc_block;
+typedef int desc_has_data;
+typedef int resc_has_data;
+
+typedef int tsplit_sm;
+typedef int trelease_sm;
+typedef int treadp_sm;
+typedef int twritep_sm;
 
 typedef int td_t;
 typedef int spdid_t;
@@ -23,44 +42,41 @@ typedef unsigned int u32_t;
 typedef unsigned short int us32_t;
 typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
-# 9 "cidl.h" 2
-# 30 "cidl.h"
-struct service_tuple {
- int TP_desc_close_TP_itself;
- int TP_desc_dep_create_TP_same;
- int TP_desc_dep_close_TP_keep;
- int TP_desc_global_TP_false;
- int TP_desc_block_TP_true_TP_lock_component;
- int TP_desc_has_data_TP_true;
- int TP_resc_has_data_TP_true;
-
- int TP_create_TP_tsplit;
- int TP_terminate_TP_trelease;
- int TP_mutate_TP_treadp;
- int TP_mutate_TP_twritep;
+# 5 "cidl.h" 2
+# 22 "cidl.h"
+struct tuple {
+ desc_close itself;
+ desc_dep_create same;
+ desc_dep_close keep;
+ desc_global false;
+ desc_block true;
+ desc_has_data true;
+ resc_has_data true;
 };
 
+struct func_sm {
+ tsplit_sm create;
+ trelease_sm terminate;
+ treadp_sm mutate;
+ twritep_sm mutate;
+};
 
 struct desc_data {
  td_t tid;
- td_t server_tid;
-
  td_t parent_tid;
  char *param;
- int param_sz;
+ int len;
  spdid_t spdid;
  tor_flags_t tflags;
  evt_t evtid;
-
  int offset;
- unsigned long long fault_cnt;
 };
 
 typedef td_t CD_desc_data_retval_CD_td_t_CD_tid; CD_desc_data_retval_CD_td_t_CD_tid
 tsplit(spdid_t CD_desc_data_CD_spdid,
     td_t CD_desc_data_CD_parent_desc_CD_parent_tid,
     char *CD_desc_data_CD_param,
-    int CD_desc_data_CD_size_of(param, param_sz),
+    int CD_desc_data_CD_size_of(param, len),
     tor_flags_t CD_desc_data_CD_tflags,
     evt_t CD_desc_data_CD_evtid);
 

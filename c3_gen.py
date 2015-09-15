@@ -15,6 +15,10 @@ from pprint import pprint
 import keywords
 import subprocess
 
+# transparent to the user (used internally, so no need to dynamically change)
+desc_track_server_id = "int server_id"
+desc_track_fault_cnt = "unsigned long long fault_cnt"
+
 class MyCode():
     def __init__(self):
         self.ifcode = {}
@@ -51,7 +55,7 @@ class BlockCode(object):
         name = block_name
 
     def show_code(self):
-        print (self.block_code)  
+        print (self.block_code)
         
 #===============================================================================
 #  block is in the form of (predicate, code, blk name)
@@ -116,12 +120,10 @@ def traverse(o, tree_types=(list, tuple)):
     else:
         yield o
 
+# this is to repalce for each function, not global
 # fdesc[0] is the func name, fdesc[1] is the normal pars
 # fdesc[4] is the IDL-ed pars  
 def replace_params(result, fdesc, code):
-    
-    global server_id
-    
     name    = fdesc[0]
     params  = fdesc[1]
     #pprint (result.tuple[0].functions[0].info)
@@ -153,59 +155,42 @@ def replace_params(result, fdesc, code):
     code =  code.replace("IDL_id", id)
     code =  code.replace("IDL_parent_id", parent_id)
     
-    
-   # replace server_id to server_xxid 
-    server_id = ""
-    for item in result.gvars["desc_data"]:
-        if "server" in item:
-            server_id = item.split()[1]
-    code =  code.replace("IDL_server_id", server_id)
-    
     return code        
 
+
+# this is to repalce in global
 # some post processing (pop up the saved params, find create function etc...)  
 def post_process(result, IFcode, IFDesc):
     
     for fdesc in IFDesc[1]:
-        name    = fdesc[0]
         params  = fdesc[1]
-        #pprint (result.tuple[0].functions[0].info)
-        #print (name)
-        #print(fdesc[4])
         
         parent_id = ""
-        id = ""
         tmp_list = list(traverse(fdesc[4]))
         for item in tmp_list:
-            if (item == "desc_lookup" or item == "desc_data_remove"):
-                id = tmp_list[tmp_list.index(item)+2]
             if (item == "parent_desc"):
                 parent_id = tmp_list[tmp_list.index(item)+2]
         param_list = []
         paramdecl_list = []
         for para in params:               # fdesc[1] is the list of normal parameters
             param_list.append(para[1])      # para[0] is the type, para[1] is the value
-            paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
+            paramdecl_list.append(para[0] + " " + para[1])  # this is for the parametes used in the function decl
         #print (', '.join(paramdecl_list))
-  
+
+
+        # replace some create function for recover purpose  
         if (fdesc[2] == "create"):
             code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
             code = code.replace("IDL_create_fname", fdesc[0])
             for i in xrange(len(param_list)):
                 param_list[i] = "desc->"+ param_list[i]
-            #print (param_list)
             code = code.replace("IDL_desc_saved_params", ', '.join(param_list))
-            IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
-            
-            code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
             code = code.replace("IDL_parent_id", parent_id)
-            code = code.replace("IDL_server_id", server_id)
             IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
 
-            code = IFcode["header"]    
+            code = IFcode["header"]
             code = code.replace("IDL_desc_saved_params", ', '.join(paramdecl_list))
             IFcode["header"] = code
-              
     
 ########################
 # generating functions
@@ -217,21 +202,23 @@ def generate_globalvas(result, IFcode):
     code, err = p.communicate()
     #print (code.split())
     #pprint(result.gvars["desc_data"])  
-      
-    # desc_track
+
+    # desc_track   (actual struct)
     tmp = "\n" + code.split()[0] + " " + code.split()[1] + " { \n"
     for item in result.gvars["desc_data"]:
-        tmp = tmp + "    " + item + ";\n"
+        tmp = tmp + "    " + " ".join(item) + ";\n"
+    tmp = tmp + "    " + desc_track_server_id + ";\n"  # transparent to the user
+    tmp = tmp + "    " + desc_track_fault_cnt + ";"
     tmp = tmp + "\n};\n"  
     code = code.replace("struct IDL_desc_track\n", tmp) # only replace a line, not everywhere
     code = code.replace("struct IDL_desc_track", "struct desc_track") # only replace a line, not everywhere
 
-    # all fields of desc_track 
+    # all fields of desc_track (to replace in the function params)
     tmp = ""
     for item in result.gvars["desc_data"]:
-        tmp = tmp + item + ", "
-    code = code.replace("IDL_desc_track_fields", tmp[:-2])
-    
+        tmp = tmp + " ".join(item) + ", "
+    code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
+
     # header files
     code = r'''#include "../cidl_gen.h"''' + "\n" + code 
     
@@ -306,33 +293,38 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
+        #pprint (tup.sm_info)
         #pprint (tup.info)
+        #pprint (tup.desc_data_fields)    
+        
         for key, value in tup.info.iteritems():
-            if (key is not tup.sm_create and
-                key is not tup.sm_mutate and
-                key is not tup.sm_terminate):
-                globaldescp.append(key+"_"+value)
+            globaldescp.append(key+"_"+value)
+            
         for func in tup.functions:
             #print (func.normal_para)  
+            #pprint(func.info["funcname"])
             normalPara = func.normal_para          
             #pprint (func.info)
             idlRet  = []
             idlPara = []
             for key, value in func.info.iteritems():
-                if (key == func.name or key == func.sm_state):
+                if (key == func.name or key == func.sm_state): # skip function name and state (only IDL stuff) 
                     continue
                 if (value and key is not func.desc_data_retval):
                     idlPara.append((key, value))
                 if (value and key is func.desc_data_retval):
                     idlRet.append((key, value))
             #print (tmpRet)
+            #print (func.name)
+            #print (func.info[func.sm_state])
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara)
+            #print (func.info)
             #pprint (perFunc)
             #print ()
-            funcdescps.append(perFunc)  
+            funcdescps.append(perFunc) 
             
-#  construct blocks of (predicate, code) 
+#  init blocks of (predicate, code) 
 def generate_blocks(globalblocks, funcblocks):
     
     # no need to do this anymore
@@ -439,17 +431,25 @@ def idl_generate(result, parsed_ast):
     funcblocks      = []
     IFcode          = {}
     
+
+    # pprint (result.tuple[0].info)
+    # pprint (result.tuple[0].sm_info)
+    # pprint (result.tuple[0].desc_data_fields)
+    # pprint (result.gvars)
+    # pprint (result.tuple[0].functions[0].info)
+    # pprint (result.tuple[0].functions[1].info)
+    # pprint (result.tuple[0].functions[2].info)
+    # pprint (result.tuple[0].functions[3].info)
+
     IFDesc = (globaldescp, funcdescps)    
     #pprint (result.gvars["desc_data"])
-
     # update blocks and descriptions to be used for evaluation 
-    generate_description(result, funcdescps, globaldescp)    
+    generate_description(result, funcdescps, globaldescp)  
     generate_blocks(globalblocks, funcblocks)
-    
+
     # evaluate the conditions and generate block code
     generate_globalvas(result, IFcode)
     generate_gblocks(globalblocks, IFDesc, IFcode)
-    #generate_fnptr(funcblocks, globalblocks, IFcode)
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
 
     #pprint (IFcode)

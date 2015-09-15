@@ -198,8 +198,9 @@ ptrdecl                     = "PtrDecl"
 # each service has a tuple and multiple functions
 class IDLServices(object):
     def __init__(self): 
-        self.tuple  = []    # system description tuple (see EMSOFT paper)
-        self.gvars  = {}    # some global data strutures, and others...
+        self.tuple      = []    # system description tuple (see EMSOFT paper)
+        self.gvars      = {}    # some global data strutures, and others...
+        self.tuple.append(IDLTuple())   # only once        
         
     def add_tuple(self):
         self.tuple.append(IDLTuple())
@@ -207,8 +208,11 @@ class IDLServices(object):
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLTuple(object):
     def __init__(self):
-        init_tuple_keyword(self)
         self.info = {} 
+        self.sm_info = {} 
+        self.desc_data_fields = []
+         
+        init_tuple_keyword(self)
         init_tuple_info(self)        
         self.functions = []
         
@@ -265,9 +269,6 @@ def init_tuple_info(tup):
     tup.info[tup.desc_block]            = []
     tup.info[tup.desc_has_data]         = []
     tup.info[tup.resc_has_data]         = []
-    tup.info[tup.sm_create]             = []
-    tup.info[tup.sm_mutate]             = []
-    tup.info[tup.sm_terminate]          = []
     
   
 # these are just some util functions  
