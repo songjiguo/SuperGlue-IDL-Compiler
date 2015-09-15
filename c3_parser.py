@@ -140,14 +140,15 @@ def parse_func(node):
     ##### begin of a function #####
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
-    # set sm state for a function
+    # set func name and sm state for a function
     fun_info[fun.name] = node.type.declname
     for k, v in result.tuple[-1].sm_info.iteritems():
         if (re.sub('\_sm$', '', k) == node.type.declname):
-            fun_info[v] = re.sub('\_sm$', '', k) 
+            #fun_info[v] = re.sub('\_sm$', '', k) 
             fun_info[fun.sm_state] = v
             break;   # only one matched function allowed    
-        
+    #pprint (fun_info)
+
     #### parameters of a function #####
     for param_decl in node.args.params:
         func_params = parse_parameters(param_decl)
@@ -252,11 +253,11 @@ if __name__ == "__main__":
 #     print("")
 #     pprint (result.tuple[0].functions[1].info)
 #     print("")
-#     pprint (result.tuple[0].functions[2].info)
+#    pprint (result.tuple[0].functions[2].info)
 #     print("")
 #     pprint (result.tuple[0].functions[3].info)
 #     print("")
-#     exit()
+#    exit()
 #===============================================================================
   
     c3_gen.idl_generate(result, ast)

@@ -95,9 +95,9 @@ def condition_eval(block, (gdescp, fdescp)):
             for desc in list_descp:
                 if (desc in pred):
                     match = match + 1;
+
         if (match == len(list_blks)):
             #print ("found a match")
-            
             IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
             IFBlkName = blk[2]  
             
@@ -177,7 +177,6 @@ def post_process(result, IFcode, IFDesc):
             paramdecl_list.append(para[0] + " " + para[1])  # this is for the parametes used in the function decl
         #print (', '.join(paramdecl_list))
 
-
         # replace some create function for recover purpose  
         if (fdesc[2] == "create"):
             code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
@@ -197,7 +196,7 @@ def post_process(result, IFcode, IFDesc):
 ########################
 def generate_globalvas(result, IFcode):
     cmd = 'sed -nr \"/\<client header start\>/{:a;n;/'\
-          '\<client header end\>/b;p;ba} \" pred\_code\/code.c'
+          '\<client header end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code.split())
@@ -220,7 +219,7 @@ def generate_globalvas(result, IFcode):
     code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
 
     # header files
-    code = r'''#include "../cidl_gen.h"''' + "\n" + code 
+    code = r'''#include "cidl_gen.h"''' + "\n" + code 
     
     #print (code)  
     IFcode["header"] = code  
@@ -288,7 +287,11 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     IFcode["header"] = IFcode["header"] + "\n//group: empty block function implementation"    
     IFcode["header"] = IFcode["header"] + '\n' + ''.join(no_match_code_list)
 
+    #pprint(IFcode)
+    #exit()
+
     post_process(result, IFcode, IFDesc)
+    
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
@@ -310,18 +313,14 @@ def generate_description(result, funcdescps, globaldescp):
             for key, value in func.info.iteritems():
                 if (key == func.name or key == func.sm_state): # skip function name and state (only IDL stuff) 
                     continue
-                if (value and key is not func.desc_data_retval):
+                elif (value and key is not func.desc_data_retval):
+                    #print(func.desc_data_retval)
                     idlPara.append((key, value))
-                if (value and key is func.desc_data_retval):
+                else:
+                    (value and key is func.desc_data_retval)
                     idlRet.append((key, value))
-            #print (tmpRet)
-            #print (func.name)
-            #print (func.info[func.sm_state])
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara)
-            #print (func.info)
-            #pprint (perFunc)
-            #print ()
             funcdescps.append(perFunc) 
             
 #  init blocks of (predicate, code) 
@@ -407,7 +406,7 @@ int main()
     #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])    
 
     # write out the result to the file (easier debug)
-    output_file = "pred_code/output.c"
+    output_file = "output.c"
     with open(output_file, "w") as text_file:
         text_file.write("{0}".format(result_code))
     
