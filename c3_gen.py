@@ -79,7 +79,7 @@ def condition_eval(block, (gdescp, fdescp)):
             list_blks.append(item) 
         #print ("\na ist of blks: sz --> ", len(list_blks))
         #print (blk[0])
-        #print (blk[1])
+        #print (blk[0])
         #print (list_blks)
         
         match = 0;
@@ -93,6 +93,7 @@ def condition_eval(block, (gdescp, fdescp)):
                     match = match + 1;
         if (match == len(list_blks)):
             #print ("found a match")
+            
             IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
             IFBlkName = blk[2]  
             
@@ -103,19 +104,6 @@ def condition_eval(block, (gdescp, fdescp)):
         for blk in block.list:
             if (blk[0][0] == "no match"):
                 return (blk[0][0], blk[1])
-                #print(blk[0])
-                #print(blk[1])
-                #print(blk[2])
-    #===========================================================================
-    # if (find_any is False):
-    #     print ("can not find any for this func block")
-    #     print (block.list[0])
-    #     for blk in block.list:
-    #         #print (blk[0])
-    #         if (blk[0] == "no match"):
-    #             print(blk[1])
-    #             print(blk[2])
-    #===========================================================================
 
     return (IFBlkName, IFCode)
     #print ("<<<<<<< eval ends! >>>>>>>>\n")
@@ -130,7 +118,10 @@ def traverse(o, tree_types=(list, tuple)):
 
 # fdesc[0] is the func name, fdesc[1] is the normal pars
 # fdesc[4] is the IDL-ed pars  
-def replace_params(fdesc, code):
+def replace_params(result, fdesc, code):
+    
+    global server_id
+    
     name    = fdesc[0]
     params  = fdesc[1]
     #pprint (result.tuple[0].functions[0].info)
@@ -153,6 +144,7 @@ def replace_params(fdesc, code):
     for para in params:               # fdesc[1] is the list of normal parameters
         param_list.append(para[1])      # para[0] is the type, para[1] is the value
         paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
+    #print (', '.join(paramdecl_list))
     code = code.replace("IDL_params", ', '.join(param_list))
     code = code.replace("IDL_pars_len", str(len(param_list)))
     code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
@@ -161,8 +153,60 @@ def replace_params(fdesc, code):
     code =  code.replace("IDL_id", id)
     code =  code.replace("IDL_parent_id", parent_id)
     
+    
+   # replace server_id to server_xxid 
+    server_id = ""
+    for item in result.gvars["desc_data"]:
+        if "server" in item:
+            server_id = item.split()[1]
+    code =  code.replace("IDL_server_id", server_id)
+    
     return code        
 
+# some post processing (pop up the saved params, find create function etc...)  
+def post_process(result, IFcode, IFDesc):
+    
+    for fdesc in IFDesc[1]:
+        name    = fdesc[0]
+        params  = fdesc[1]
+        #pprint (result.tuple[0].functions[0].info)
+        #print (name)
+        #print(fdesc[4])
+        
+        parent_id = ""
+        id = ""
+        tmp_list = list(traverse(fdesc[4]))
+        for item in tmp_list:
+            if (item == "desc_lookup" or item == "desc_data_remove"):
+                id = tmp_list[tmp_list.index(item)+2]
+            if (item == "parent_desc"):
+                parent_id = tmp_list[tmp_list.index(item)+2]
+        param_list = []
+        paramdecl_list = []
+        for para in params:               # fdesc[1] is the list of normal parameters
+            param_list.append(para[1])      # para[0] is the type, para[1] is the value
+            paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
+        #print (', '.join(paramdecl_list))
+  
+        if (fdesc[2] == "create"):
+            code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
+            code = code.replace("IDL_create_fname", fdesc[0])
+            for i in xrange(len(param_list)):
+                param_list[i] = "desc->"+ param_list[i]
+            #print (param_list)
+            code = code.replace("IDL_desc_saved_params", ', '.join(param_list))
+            IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
+            
+            code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
+            code = code.replace("IDL_parent_id", parent_id)
+            code = code.replace("IDL_server_id", server_id)
+            IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
+
+            code = IFcode["header"]    
+            code = code.replace("IDL_desc_saved_params", ', '.join(paramdecl_list))
+            IFcode["header"] = code
+              
+    
 ########################
 # generating functions
 ########################
@@ -215,6 +259,7 @@ def generate_fnptr(funcblocks, globalblocks, IFcode):
 
 def generate_gblocks(globalblocks, IFDesc, IFcode):
     # the global blocks
+    IFcode["header"] = IFcode["header"] + "//group: block function declarations \n"
     if (globalblocks):
         __IFcode = {}
         for gblk in globalblocks:
@@ -225,10 +270,11 @@ def generate_gblocks(globalblocks, IFDesc, IFcode):
                 # now write out static function declarations!!!
                 #print (code.split('\n', 1)[0])
                 IFcode["header"] = IFcode["header"] + code.split('\n', 1)[0][:-2]+";" + "\n"
-    IFcode["global"] = __IFcode               
+    IFcode["global"] = __IFcode
+    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])     
+    #exit()          
 
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
-    
     no_match_code_list = []
     
     # the function blocks    
@@ -238,7 +284,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             #fblk.show()
 
             name, code = condition_eval(fblk, (IFDesc[0], fdesc))  
-            code = replace_params(fdesc, code)
+            code = replace_params(result, fdesc, code)
 
             if (name == "no match"):
                 if (code not in no_match_code_list):
@@ -248,53 +294,14 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             if (name and code):
                 __IFcode[name] = code
                 # now write out static function declarations!!!
-                #print(name)
-                #print (code.split('\n', 1)[0])
                 IFcode["header"] = IFcode["header"] + code.split('\n', 1)[0][:-2]+";" + "\n"
-        #=======================================================================
-        # for dname, dcode in __IFcode.iteritems():
-        #     if (dname):
-        #         print ("<<<<" + dname + ">>>>")
-        #         print (dcode)
-        #=======================================================================
         IFcode[fdesc[0]] = __IFcode
-        
-    
-    #exit()
-    # some post processing (pop up the saved params, find create function etc...)  
-    code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
-    #code = code.replace("IDL_create_fname", "kevin")
-    populated_create_fn_pars = []
-    for fdesc in IFDesc[1]:
-        #print(fdesc[0]) 
-        #print(fdesc[2]) 
-        if (fdesc[2] == "create"):
-            code = code.replace("IDL_create_fname", fdesc[0])
-            #print(fdesc[0]) 
-            #print(fdesc[2]) 
-            #print (fdesc[1])
-            # compare create function par list and the desc saved fileds, then populate
-            for saved_field in result.gvars["desc_data"]:
-                for create_fn_par in fdesc[1]:
-                    #print (' '.join(create_fn_par))
-                    #print (saved_field)
-                    if (saved_field == ' '.join(create_fn_par)):
-                        populated_create_fn_pars.append("desc->"+create_fn_par[1])  # populate the par val
 
-    #print (', '.join(populated_create_fn_pars))
-            
-    code = code.replace("IDL_desc_saved_params", ', '.join(populated_create_fn_pars))            
-    IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
-    
-    #pprint (IFcode)    
-    #exit()
-    
     # this is the non-match list and should be empty static inline function
-    #print (no_match_code_list)
+    IFcode["header"] = IFcode["header"] + "\n//group: empty block function implementation"    
     IFcode["header"] = IFcode["header"] + '\n' + ''.join(no_match_code_list)
-    #pprint (IFcode)
-    #exit()
-        
+
+    post_process(result, IFcode, IFDesc)
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
@@ -393,8 +400,7 @@ def paste_idl_code(IFcode):
             result_code = result_code + v
             result_code = result_code + "\n"       
     
-    #print (result_code)
-    
+    #print (result_code)    
     
     # make a fake main function for testing only
     fake_main = r"""
@@ -405,6 +411,8 @@ int main()
 }
 """
     result_code = result_code + "\n" + fake_main
+    
+    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])    
 
     # write out the result to the file (easier debug)
     output_file = "pred_code/output.c"
@@ -445,6 +453,5 @@ def idl_generate(result, parsed_ast):
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
 
     #pprint (IFcode)
-    
     #exit()
     paste_idl_code(IFcode)   # make some further process here

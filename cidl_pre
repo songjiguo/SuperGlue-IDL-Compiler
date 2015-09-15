@@ -42,10 +42,10 @@ struct service_tuple {
 
 
 struct desc_data {
- td_t id;
- td_t server_id;
+ td_t tid;
+ td_t server_tid;
 
- td_t parent_id;
+ td_t parent_tid;
  char *param;
  int param_sz;
  spdid_t spdid;

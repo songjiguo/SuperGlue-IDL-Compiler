@@ -1,4 +1,4 @@
-`/*****************************/
+/*****************************/
 /*  ds, inside function etc. used as fake header for now */
 /*****************************/
 // client header start
@@ -6,19 +6,22 @@ struct IDL_desc_track
 
 static volatile unsigned long global_fault_cnt = 0;
 
-// TODO: consider inline for some function and implement them
-static void call_update_id(int old_id, int new_id) {}
-static int call_introspect_creator(int id) {}
-static void call_recover_upcall(int dest_spd, int id) {}
-static void call_restore_data(struct desc_track *desc) {}
-static void call_save_data(int id, void *data) {}
+// TODO: implement them
+static inline void call_update_id(int old_id, int new_id) {}
+static inline int call_introspect_creator(int id) {}
+static inline void call_recover_upcall(int dest_spd, int id) {}
+static inline void call_restore_data(struct desc_track *desc) {}
+static inline void call_save_data(int id, void *data) {}
+static inline struct desc_track *call_desc_alloc() {}
+static inline void call_desc_dealloc(struct desc_track *desc) {}
+static inline struct desc_track *call_desc_lookup(int id) {}
+static inline struct desc_track *call_desc_update(int id) {}
+static inline void call_desc_rec_state(struct desc_track *desc) {}
 
-static struct desc_track *call_desc_alloc() {}
-static void call_desc_dealloc(struct desc_track *desc) {}
-static struct desc_track *call_desc_lookup(int id) {}
-static struct desc_track *call_desc_update(int id) {}
-static void call_desc_rec_state(struct desc_track *desc) {}
-static void call_desc_cons(struct desc_track *desc, IDL_desc_track_fields) {}
+/* track client id, server id and the parameters here */
+// TODO: what else to track??
+static inline void call_desc_cons(struct desc_track *desc, int id, int server_id, IDL_desc_saved_params) {}
+//static inline void call_desc_cons(struct desc_track *desc, IDL_desc_track_fields) {}
 
 // client header end
 
@@ -35,7 +38,7 @@ create
 static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 	struct desc_track *parent_desc = NULL;
 	if ((parent_desc = call_desc_lookup(IDL_parent_id))) {
-		IDL_parent_id = parent_desc->server_id;
+		IDL_parent_id = parent_desc->IDL_server_id;
 	}
 	
 	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
@@ -43,8 +46,6 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 		block_cli_if_recover(IDL_parent_id);
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
 	}
-
-
 }
 // block_cli_if_invoke 1 end
 
@@ -70,7 +71,7 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 			block_cli_if_recover(IDL_id);
 			block_cli_if_recover_subtree(IDL_id);
 		}
-		call_update_id(IDL_id, desc->server_id);
+		call_update_id(IDL_id, desc->IDL_server_id);
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
 	} else {  // could be created in different component
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
@@ -138,10 +139,13 @@ static inline void block_cli_if_basic_id(int id) {
 	
 	int retval = 0;
 	retval = IDL_create_fname(IDL_desc_saved_params);
-	
-	if (retval == -1) {
-		id = desc->parent_id;
+
+	//TODO: define the error code for non-recovered parent
+	if (retval == -99) {
+		id = desc->IDL_parent_id;
 		block_cli_if_recover(id);
+	} else {
+		desc->IDL_server_id = retval;	
 	}
 	
 	block_cli_if_recover_data(desc);
@@ -156,10 +160,10 @@ static inline void block_cli_if_basic_id(int id) {
 
 	assert(id);
 	struct desc_track *desc = call_desc_lookup(id);
-	assert(desc;)
-
+	assert(desc);
+	
 	int retval = 0;
-	IDL_fname(IDL_desc_saved_params);
+	desc->IDL_server_id = IDL_fname(IDL_desc_saved_params);
 	block_cli_if_recover_data)(desc);
 }
 // block_cli_if_basic_id 2 end
