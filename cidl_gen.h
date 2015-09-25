@@ -7,9 +7,9 @@ enum {
 	itself,
 	same,
 	kepp,
-	create,
-	mutate,
-	terminate
+	creation,
+	transition,
+	terminal
 };
 
 typedef int desc_close;
@@ -35,6 +35,12 @@ typedef unsigned short int us32_t;
 typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
+#define service_global_info struct global_info
+
+#define sm_creation(x) void SM_creation_SM_##x
+#define sm_terminal(x) void SM_terminal_SM_##x
+#define sm_transition(x, y) void SM_transition_SM_##x##_SM_##y
+
 /* need the second layer of indirection here .... when there is ## in x*/
 #define __desc_data_hidden(x)  CD_desc_data_CD_##x
 #define __desc_data(x) __desc_data_hidden(x)
@@ -43,9 +49,11 @@ typedef unsigned long long ull_t;
 #define desc(x) CD_desc_lookup_CD_##x
 #define parent_desc(x) parent_desc_CD_##x
 #define ret(x) _retval_##x
-#define desc_data_retval(x, y) 									\
+#define desc_data_retval(x, y)				\
 	typedef x CD_desc_data_retval_CD_##x##_CD_##y;	\
 	CD_desc_data_retval_CD_##x##_CD_##y
-#define desc_data_remove(x)	CD_desc_data_remove_CD_##x
+#define desc_terminate(x)	CD_desc_terminate_CD_##x
+
+
 
 #endif /* _cos_idl_h */

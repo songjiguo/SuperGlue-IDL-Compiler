@@ -30,7 +30,7 @@ class IDLBlock(object):
             print (item[1])     #--- code
 
 ########################
-##  blocks
+##  blocks (interpret the code_template.c for generating blocks)
 ########################
 
 def build_blk_code(blknode, blkname):
@@ -40,17 +40,18 @@ def build_blk_code(blknode, blkname):
     i = 1
     while(i < 10):   # max 10 different (pred, code)
         cmd = 'sed -nr \"/\<'+ blkstr +' pred '+str(i)+' start\>/{:a;n;/'\
-              '\<'+ blkstr +' pred '+str(i)+' end\>/b;p;ba} \" pred\_code\/code.c'
+              '\<'+ blkstr +' pred '+str(i)+' end\>/b;p;ba} \" code_template.c'
         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
         pred, err = p.communicate() 
         
+        #print (pred)
         #pred = pred.replace("\\n\" \\", "\"")        # extract pred
         if not pred:
             break;
         #pred = pred.replace('"', '').strip()        # remove "
         #print(pred)
         cmd = 'sed -nr \"/\<'+ blkstr +' '+str(i)+' start\>/{:a;n;/'\
-              '\<'+ blkstr +' '+str(i)+' end\>/b;p;ba} \" pred\_code\/code.c'
+              '\<'+ blkstr +' '+str(i)+' end\>/b;p;ba} \" code_template.c'
         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
         code, err = p.communicate()
         if not code:
@@ -66,7 +67,7 @@ def build_blk_code(blknode, blkname):
         i = i+1
 
     cmd = 'sed -nr \"/\<'+ blkstr +' no match start\>/{:a;n;/'\
-          '\<'+ blkstr +' no match end\>/b;p;ba} \" pred\_code\/code.c'
+          '\<'+ blkstr +' no match end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code)
@@ -74,7 +75,7 @@ def build_blk_code(blknode, blkname):
     blknode.add_blk(pred, code, blkname)
 
     cmd = 'sed -nr \"/\<'+ blkstr +' func pointer decl start\>/{:a;n;/'\
-          '\<'+ blkstr +' func pointer decl end\>/b;p;ba} \" pred\_code\/code.c'
+          '\<'+ blkstr +' func pointer decl end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code)
@@ -82,7 +83,7 @@ def build_blk_code(blknode, blkname):
     blknode.add_blk(pred, code, blkname)
     
     cmd = 'sed -nr \"/\<'+ blkstr +' func pointer start\>/{:a;n;/'\
-          '\<'+ blkstr +' func pointer end\>/b;p;ba} \" pred\_code\/code.c'
+          '\<'+ blkstr +' func pointer end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code)
@@ -233,7 +234,7 @@ def init_function_keyword(node):
     node.sm_state                = "funcsm" 
     node.desc_data               = "desc_data"
     node.desc_data_retval        = "desc_data_retval" #--> in the form of (type, value)
-    node.desc_data_remove        = "desc_data_remove" #--> in the form of (value)
+    node.desc_data_remove        = "desc_terminate" #--> in the form of (value)
     node.desc_lookup             = "desc_lookup" #--> in the form of (vale, type)
     node.desc_data_add           = "desc_data_add" #--> in the form of (target_to_add, value, type)
     node.resc_data_add           = "resc_data"     #--> in the form of (desc_id, value, type)
@@ -247,9 +248,9 @@ def init_tuple_keyword(node):
     node.desc_block              = "desc_block" #--> in the form of (desc_block, T/F, [component])
     node.desc_has_data           = "desc_has_data"
     node.resc_has_data           = "resc_has_data"    
-    node.sm_create               = "create"
-    node.sm_mutate               = "mutate"
-    node.sm_terminate            = "terminate"
+    node.sm_create               = "creation"
+    node.sm_mutate               = "transition"
+    node.sm_terminate            = "terminal"
   
 def init_func_info(func):
     func.info[func.name]                = []

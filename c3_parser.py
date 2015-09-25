@@ -69,7 +69,38 @@ def parse_idl_str(delimiter, mystr):
         last_str = last_str[1:]
     ret.append(last_str)    
     return ret
+
+def traverse(o, tree_types=(list, tuple)):
+    if isinstance(o, tree_types):
+        for value in o:
+            for subvalue in traverse(value, tree_types):
+                yield subvalue
+    else:
+        yield o
     
+#===============================================================================
+# # Decl: [name, quals, storage, funcspec, type*, init*, bitsize*]
+# # field is Decl  
+#
+#  This is used to construct State Machine information
+#===============================================================================
+class DeclVisitor(c_ast.NodeVisitor):
+    def visit_Decl(self, node):
+        parse_decl_info(node)
+        
+def parse_decl_info(node):
+    #print (node.name)
+    if (node.name is None):
+        return
+    else:
+        ret = parse_idl_str('SM', node.name)
+      
+    if (ret[0] == "creation" or ret[0] == "terminal"):
+        result.tuple[-1].sm_info[ret[0]] = ret[1]
+    elif (ret[0] == "transition"):
+        transition_list.append((ret[1], ret[2]))
+        result.tuple[-1].sm_info[ret[0]] = transition_list
+      
 #===============================================================================
 # # Struct: [name, decls**]
 # # struct is node.decls  --> decl list (node is Struct)
@@ -82,6 +113,8 @@ def parse_idl_str(delimiter, mystr):
 # 
 # # IdentifierType: [names]
 # # field.type.tpye is IdentifierType  
+#
+#  This is used to construct global information (e.g., tuple in the paper)
 #===============================================================================
 class StructVisitor(c_ast.NodeVisitor):
     def visit_Struct(self, node):
@@ -101,7 +134,7 @@ def parse_structure_info(node):
         elif (tmp == keywords.funcdecl):
             print ("keywords is function decl")
         val = field.name
-        if (node.name == "tuple"):
+        if (node.name == "global_info"):
             result.tuple[-1].info[key] = val
             result.gvars[node.name] = result.tuple[-1].info
         elif (node.name == "func_sm"):
@@ -126,6 +159,8 @@ def parse_structure_info(node):
 # 
 # # IdentifierType: [names]
 # # ndoe.type.tpye is IdentifierType  
+#
+# This is used to contruct information for each function and the tracking data
 #===============================================================================
 class FuncDeclVisitor(c_ast.NodeVisitor):
     def visit_FuncDecl(self, node):
@@ -133,6 +168,30 @@ class FuncDeclVisitor(c_ast.NodeVisitor):
         result.tuple[-1].add_function()
         parse_func(node)
         
+# automatically generate the tracking fields        
+def construct_desc_fields(field_str):
+    # construct tracking descriptor struture
+    desc_str        = "desc_data"
+    pdesc_str       = "parent_desc"
+    desc_add_str    = "desc_data_add"
+    desc_sizeof     = "size_of"
+    desc_retval     = "desc_data_retval"
+    if (desc_str in field_str and pdesc_str in field_str):
+        idx = field_str.index(pdesc_str)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
+    elif (desc_str in field_str and desc_sizeof in field_str):
+        idx = field_str.index(desc_sizeof)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])         
+    elif (desc_str in field_str):
+        idx = field_str.index(desc_str)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])            
+    elif (desc_add_str in field_str):
+        idx = field_str.index(desc_add_str)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+2].split(" ")[0],field_str[idx+1]])
+    elif (desc_retval in field_str):
+        idx = field_str.index(desc_retval)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
+           
 def parse_func(node):
     global idl_parse_result 
     func_params = [] 
@@ -140,24 +199,31 @@ def parse_func(node):
     ##### begin of a function #####
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
-    # set func name and sm state for a function
-    fun_info[fun.name] = node.type.declname
+    #pprint (result.tuple[0].sm_info)
     for k, v in result.tuple[-1].sm_info.iteritems():
-        if (re.sub('\_sm$', '', k) == node.type.declname):
-            #fun_info[v] = re.sub('\_sm$', '', k) 
-            fun_info[fun.sm_state] = v
-            break;   # only one matched function allowed    
-    #pprint (fun_info)
+        #print(k)
+        #print(v)
+        #print(node.type.declname)
+        #print()
+        if (node.type.declname == v): 
+            fun_info[fun.sm_state]  = k
+        fun_info[fun.name]      = node.type.declname # set creation  or terminal func
+    if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
+        fun_info[fun.sm_state]  = "transition"
 
     #### parameters of a function #####
     for param_decl in node.args.params:
         func_params = parse_parameters(param_decl)
         #print (func_params)
+        #print (list(traverse(func_params)))
         # swap the type and value for para (last one is the pycparser type, eg.g, PtrDecl)
         tmp = func_params[-2]
         func_params[-2] = func_params[-3]
         func_params[-3] = tmp
            
+        #print (func_params)
+        construct_desc_fields(func_params)   # construct desc tracking fields    
+        
         # for normal parameters
         fun.normal_para.append((func_params[-3], func_params[-2]))
            
@@ -173,9 +239,13 @@ def parse_func(node):
     func_return = parse_idl_str('CD', str(get_dec_type_name(node)[0]))
     if (not func_return[0]):
         func_return[0] = node.type.type.names[0]
+                
+    construct_desc_fields(func_return)   # construct desc tracking fields    
+    
     fun_info[func_return[0]] = func_return[1:]
     
     #print (result.tuple[-1].functions[-1].normal_para)
+    #print (result.tuple[-1].functions[-1].info)
 
 # # Decl: [name, quals, storage, funcspec, type*, init*, bitsize*]
 # # node is a Decl
@@ -210,11 +280,23 @@ def parse_parameters(node):
 def parse_func_decl(ast):
     v = FuncDeclVisitor()
     v.visit(ast)
+    result.gvars["desc_data"] = result.tuple[-1].desc_data_fields
     
-def parse_struct(ast):
+def parse_global_info(ast):
     v = StructVisitor()
     v.visit(ast)
     
+def parse_state_machine(ast):
+    global transition_list
+    transition_list = []
+    v = DeclVisitor()
+    v.visit(ast) 
+    #pprint (result.tuple[0].sm_info)
+    #pprint(result.tuple[-1].sm_info['creation'])
+    #pprint(result.tuple[-1].sm_info['terminal'])
+    #pprint(result.tuple[-1].sm_info['transition'])
+   
+
 #===============================================================================
 # def parse_global_vars(ast):
 #     v = GlobalVarsVisitor()
@@ -239,9 +321,13 @@ if __name__ == "__main__":
     #ast.show()
     
     result = keywords.IDLServices()
-    parse_struct(ast)
+    
+    parse_global_info(ast)
+    parse_state_machine(ast)
+    #pprint (result.tuple[0].sm_info)
+    #print()    
     parse_func_decl(ast)
-  
+    #pprint(result.gvars)
 #===============================================================================
 #     # pprint (result.tuple[0].info)
 #     # pprint (result.tuple[0].sm_info)

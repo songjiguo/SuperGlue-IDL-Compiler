@@ -12,7 +12,7 @@ from pycparser import parse_file, preprocess_file
 from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
 from pprint import pprint
 
-import keywords
+import keywords, sys, os
 import subprocess
 
 # transparent to the user (used internally, so no need to dynamically change)
@@ -82,9 +82,10 @@ def condition_eval(block, (gdescp, fdescp)):
         for item in __list_blks:
             list_blks.append(item) 
         #print ("\na ist of blks: sz --> ", len(list_blks))
-        #print (blk[0])
-        #print (blk[0])
-        #print (list_blks)
+        
+            #print (blk[0])
+            #print (blk[0])
+            #print (list_blks)
         
         match = 0;
         for pred in list_blks:
@@ -94,13 +95,14 @@ def condition_eval(block, (gdescp, fdescp)):
             #print (list_descp)
             for desc in list_descp:
                 if (desc in pred):
+                    #print ("found one")
+                    #print (desc)
                     match = match + 1;
 
         if (match == len(list_blks)):
             #print ("found a match")
             IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
             IFBlkName = blk[2]  
-            
             find_any = True
             break;  # stop once we have found a match TODO: check the consistency
 
@@ -108,7 +110,6 @@ def condition_eval(block, (gdescp, fdescp)):
         for blk in block.list:
             if (blk[0][0] == "no match"):
                 return (blk[0][0], blk[1])
-
     return (IFBlkName, IFCode)
     #print ("<<<<<<< eval ends! >>>>>>>>\n")
         
@@ -134,10 +135,11 @@ def replace_params(result, fdesc, code):
     id = ""
     tmp_list = list(traverse(fdesc[4]))
     for item in tmp_list:
-        if (item == "desc_lookup" or item == "desc_data_remove"):
+        if (item == "desc_lookup" or item == "desc_terminate"):
             id = tmp_list[tmp_list.index(item)+2]
         if (item == "parent_desc"):
             parent_id = tmp_list[tmp_list.index(item)+2]
+    #print (name)
     #print (id)
     #print (parent_id)
     
@@ -151,9 +153,11 @@ def replace_params(result, fdesc, code):
     code = code.replace("IDL_pars_len", str(len(param_list)))
     code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
     code = code.replace("IDL_fname", name)
-   
-    code =  code.replace("IDL_id", id)
-    code =  code.replace("IDL_parent_id", parent_id)
+    
+    if (id):
+        code =  code.replace("IDL_id", id)
+    if (parent_id):
+        code =  code.replace("IDL_parent_id", parent_id)
     
     return code        
 
@@ -164,6 +168,9 @@ def post_process(result, IFcode, IFDesc):
     
     for fdesc in IFDesc[1]:
         params  = fdesc[1]
+        
+        #print(fdesc[1])
+        #print(fdesc[2])
         
         parent_id = ""
         tmp_list = list(traverse(fdesc[4]))
@@ -178,7 +185,8 @@ def post_process(result, IFcode, IFDesc):
         #print (', '.join(paramdecl_list))
 
         # replace some create function for recover purpose  
-        if (fdesc[2] == "create"):
+        if (fdesc[2] == "creation"):
+            
             code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
             code = code.replace("IDL_create_fname", fdesc[0])
             for i in xrange(len(param_list)):
@@ -262,16 +270,14 @@ def generate_gblocks(globalblocks, IFDesc, IFcode):
 
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     no_match_code_list = []
-    
     # the function blocks    
     for fdesc in IFDesc[1]:
         __IFcode = {}        
         for fblk in funcblocks:
             #fblk.show()
-
-            name, code = condition_eval(fblk, (IFDesc[0], fdesc))  
+            name, code = condition_eval(fblk, (IFDesc[0], fdesc)) 
             code = replace_params(result, fdesc, code)
-
+            
             if (name == "no match"):
                 if (code not in no_match_code_list):
                     no_match_code_list.append(code)
@@ -298,7 +304,7 @@ def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
         #pprint (tup.sm_info)
         #pprint (tup.info)
-        #pprint (tup.desc_data_fields)    
+        #pprint (tup.desc_data_fields)
         
         for key, value in tup.info.iteritems():
             globaldescp.append(key+"_"+value)
@@ -319,10 +325,12 @@ def generate_description(result, funcdescps, globaldescp):
                 else:
                     (value and key is func.desc_data_retval)
                     idlRet.append((key, value))
+            # Kevin Andy
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara)
+            #pprint (perFunc)
             funcdescps.append(perFunc) 
-            
+        #exit()
 #  init blocks of (predicate, code) 
 def generate_blocks(globalblocks, funcblocks):
     
@@ -360,6 +368,8 @@ def generate_blocks(globalblocks, funcblocks):
 def paste_idl_code(IFcode):
     
     result_code = IFcode['header'] + "\n"
+    
+    result_code = result_code + IFcode['sm'] + "\n"
 
     #===========================================================================
     # tmp_dict = IFcode['funptr']
@@ -384,7 +394,7 @@ def paste_idl_code(IFcode):
     #===========================================================================
     
     for kname, vdict in IFcode.iteritems():
-        if (kname == "funptr" or kname == "global" or kname == "header"):
+        if (kname == "funptr" or kname == "global" or kname == "header" or kname == "sm"):
             continue
         for k, v in vdict.iteritems():
             #print(v)
@@ -409,6 +419,9 @@ int main()
     output_file = "output.c"
     with open(output_file, "w") as text_file:
         text_file.write("{0}".format(result_code))
+        
+    #os.system("cat output.c")        
+    #exit()
     
     # generate the new ast for the interface code
     parser = c_parser.CParser()
@@ -418,6 +431,117 @@ int main()
     #ast.show()
 
     print ("IDL process is done")
+    
+
+def intersect(a, b):
+    return list(set(a) & set(b))
+ 
+def difference(a,b): 
+    return list(set(a) - set(b))
+ 
+def construct_fault_transition(from_list, to_list):
+    fault_transition_list = []
+    tmp = []
+    #for item in from_list:
+    #    print(item)
+    #print()
+    #for item in to_list:
+    #    print(item)
+
+    tmp = difference(from_list, to_list)  # only in from_list (must be creation)
+    if (tmp):
+        fault_transition_list.append("{"+ tmp[0] + ", " + tmp[0] + ", " 
+                                     + "fault" + "}" +",\n       ")   
+    
+    tmp = difference(to_list, from_list)  # only in to_list (must be terminal)
+    idx = 0;
+    ret = ""
+    for item in to_list:
+        if (item == tmp[0]):
+            #print (to_list[idx])
+            if (from_list[idx] not in to_list):  # ignore the one that also on the to_list
+                ret = from_list[idx]            
+        idx = idx + 1
+    
+    if (ret):
+        fault_transition_list.append("{"+  tmp[0] + ", " + ret + ", " 
+                                     + "fault" + "}" +",\n       ")  
+    
+    tmp = intersect(from_list, to_list)   # in both from_list and to_list
+    for new_item in tmp:
+        idx = 0;
+        ret = ""
+        for item in to_list:
+            if (item == new_item):
+                #print (to_list[idx])
+                if (from_list[idx] not in to_list):  # ignore the one that also on the to_list
+                    ret = from_list[idx]            
+            idx = idx + 1
+        if (ret):
+            fault_transition_list.append("{"+  new_item + ", " + ret + ", " 
+                                         + "fault" + "}" +",\n       ")  
+    
+    return fault_transition_list
+        
+    
+def generate_sm_transition(result, funcblocks, IFcode):    
+    #print("constructing SM transition")
+    
+    fn_list = []
+    state_list = []
+    transition_list = []
+    
+    from_list = []
+    to_list = []
+    
+    for tup in result.tuple:
+        # here we fix the start and end to be 1st and 2nd in the list
+        for func in tup.functions:
+            if (func.info[func.sm_state] == "creation"):
+                fn_list.insert(0, func.info[func.name])
+                state_list.insert(0, "state_"+func.info[func.name])
+            elif (func.info[func.sm_state] == "terminal"):
+                fn_list.insert(1, func.info[func.name])
+                state_list.insert(1, "state_"+func.info[func.name])
+            else:
+                fn_list.append(func.info[func.name])
+                state_list.append("state_"+func.info[func.name])
+                 
+        #pprint (tup.sm_info["transition"])
+        for item in tup.sm_info["transition"]:
+            from_list.append("state_" + item[0])
+            to_list.append("state_" + item[1])
+            
+            tmp_str = ""
+            if (item[0] != item[1]):
+                tmp_str = "ok"
+            else:
+                tmp_str = "again"
+            transition_list.append("{"+ "state_"+ item[0] + ", " + 
+                                   "state_" + item[1] + ", " + 
+                                   tmp_str + "}" +",\n       ")    
+    
+    # now construct the transition under the fault situation (from 2 lists)
+
+    fault_transition = construct_fault_transition(from_list, to_list)
+    for item in fault_transition:
+        transition_list.append(item) 
+       
+        
+    cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
+          '\<client sm end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    #print (code)
+
+    code = code.replace("IDL_fn_list", ', '.join(fn_list))
+    code = code.replace("IDL_state_list", ', '.join(state_list))
+    code = code.replace("IDL_transition_rules", ' '.join(transition_list))
+    
+    #print (code)  
+    IFcode["sm"] = code  
+    #print(IFcode["sm"])
+    #exit()    
     
 #===============================================================================
 # the function to process passed in result and generate block code
@@ -430,7 +554,7 @@ def idl_generate(result, parsed_ast):
     funcblocks      = []
     IFcode          = {}
     
-
+    #===========================================================================
     # pprint (result.tuple[0].info)
     # pprint (result.tuple[0].sm_info)
     # pprint (result.tuple[0].desc_data_fields)
@@ -439,10 +563,13 @@ def idl_generate(result, parsed_ast):
     # pprint (result.tuple[0].functions[1].info)
     # pprint (result.tuple[0].functions[2].info)
     # pprint (result.tuple[0].functions[3].info)
+    #===========================================================================
+    #pprint (result.tuple[0].functions[1].info['funcname'])
+    #exit()
 
     IFDesc = (globaldescp, funcdescps)    
-    #pprint (result.gvars["desc_data"])
-    # update blocks and descriptions to be used for evaluation 
+
+    # build blocks and descriptions
     generate_description(result, funcdescps, globaldescp)  
     generate_blocks(globalblocks, funcblocks)
 
@@ -450,6 +577,9 @@ def idl_generate(result, parsed_ast):
     generate_globalvas(result, IFcode)
     generate_gblocks(globalblocks, IFDesc, IFcode)
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
+    
+    # add SM transition code
+    generate_sm_transition(result, funcblocks, IFcode)
 
     #pprint (IFcode)
     #exit()

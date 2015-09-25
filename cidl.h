@@ -3,23 +3,7 @@
 
 #include "cidl_gen.h"
 
-//struct service_tuple {
-	//desc_close(itself);
-	//desc_dep_create(same);
-	//desc_dep_close(keep);
-	//desc_global(false);
-	//desc_block(true, lock_component);
-	//desc_has_data(true);
-	//resc_has_data(true);
-	
-	//sm_create(tsplit);
-	//sm_terminate(trelease);
-	//sm_mutate(treadp);
-	//sm_mutate(twritep);
-	
-//}
-
-struct tuple {
+service_global_info {
 	desc_close         itself;
 	desc_dep_create    same;
 	desc_dep_close     keep;
@@ -29,23 +13,14 @@ struct tuple {
 	resc_has_data      true;
 };
 
-struct func_sm {
-	tsplit_sm      create;
-	trelease_sm	   terminate;
-	treadp_sm	   mutate;
-	twritep_sm	   mutate;
-};
-
-struct desc_data {
-	td_t tid;
-	td_t parent_tid;
-	char *param;
-	int len;
-	spdid_t spdid;
-	tor_flags_t tflags;
-	evt_t evtid;
-	int offset;	
-};
+sm_creation(tsplit);
+sm_transition(tsplit, trelease);
+sm_transition(tsplit, treadp);
+sm_transition(treadp, treadp);
+sm_transition(treadp, trelease);
+sm_transition(tsplit, twritep);
+sm_transition(twritep, trelease);
+sm_terminal(trelease);
 
 desc_data_retval(td_t, tid)
 tsplit(spdid_t desc_data(spdid),
@@ -58,20 +33,20 @@ tsplit(spdid_t desc_data(spdid),
 /* treadp returns cbuf id  */
 int
 treadp(spdid_t spdid,
-	   td_t desc(tid),
- 	   int len,
- 	   int *ret(cbuf_off),
- 	   int *desc_data_add(offset, ret(sz))){;} 
+       td_t desc(tid),
+       int len,
+       int *ret(cbuf_off),
+       int *desc_data_add(offset, ret(sz)));
 
 /* twritep returns written bytes */
 int
 twritep(spdid_t spdid,
-		td_t desc(tid),
- 		int resc_data(tid, cbid),
- 		int sz){;}
-	   
+	td_t desc(tid),
+	int resource_data(tid, cbid), 
+	int sz);
+
 void
 trelease(spdid_t spdid,
- 		 td_t desc_data_remove(tid)){;}
+	 td_t desc_terminate(tid));
 
 #endif /* _COS_IDL_H */

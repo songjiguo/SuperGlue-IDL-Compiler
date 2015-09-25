@@ -15,9 +15,9 @@ enum {
  itself,
  same,
  kepp,
- create,
- mutate,
- terminate
+ creation,
+ transition,
+ terminal
 };
 
 typedef int desc_close;
@@ -43,8 +43,8 @@ typedef unsigned short int us32_t;
 typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 # 5 "cidl.h" 2
-# 22 "cidl.h"
-struct tuple {
+
+struct global_info {
  desc_close itself;
  desc_dep_create same;
  desc_dep_close keep;
@@ -54,23 +54,14 @@ struct tuple {
  resc_has_data true;
 };
 
-struct func_sm {
- tsplit_sm create;
- trelease_sm terminate;
- treadp_sm mutate;
- twritep_sm mutate;
-};
-
-struct desc_data {
- td_t tid;
- td_t parent_tid;
- char *param;
- int len;
- spdid_t spdid;
- tor_flags_t tflags;
- evt_t evtid;
- int offset;
-};
+void SM_creation_SM_tsplit;
+void SM_transition_SM_tsplit_SM_trelease;
+void SM_transition_SM_tsplit_SM_treadp;
+void SM_transition_SM_treadp_SM_treadp;
+void SM_transition_SM_treadp_SM_trelease;
+void SM_transition_SM_tsplit_SM_twritep;
+void SM_transition_SM_twritep_SM_trelease;
+void SM_terminal_SM_trelease;
 
 typedef td_t CD_desc_data_retval_CD_td_t_CD_tid; CD_desc_data_retval_CD_td_t_CD_tid
 tsplit(spdid_t CD_desc_data_CD_spdid,
@@ -83,18 +74,18 @@ tsplit(spdid_t CD_desc_data_CD_spdid,
 
 int
 treadp(spdid_t spdid,
-    td_t CD_desc_lookup_CD_tid,
-     int len,
-     int *_retval_cbuf_off,
-     int *desc_data_add(offset, _retval_sz)){;}
+       td_t CD_desc_lookup_CD_tid,
+       int len,
+       int *_retval_cbuf_off,
+       int *desc_data_add(offset, _retval_sz));
 
 
 int
 twritep(spdid_t spdid,
-  td_t CD_desc_lookup_CD_tid,
-   int resc_data(tid, cbid),
-   int sz){;}
+ td_t CD_desc_lookup_CD_tid,
+ int resource_data(tid, cbid),
+ int sz);
 
 void
 trelease(spdid_t spdid,
-    td_t CD_desc_data_remove_CD_tid){;}
+  td_t CD_desc_terminate_CD_tid);
