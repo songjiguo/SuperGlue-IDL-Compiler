@@ -231,6 +231,7 @@ class IDLFunction():
 
 def init_function_keyword(node):
     node.name                    = "funcname"
+    node.type                    = "functype" 
     node.sm_state                = "funcsm" 
     node.desc_data               = "desc_data"
     node.desc_data_retval        = "desc_data_retval" #--> in the form of (type, value)
@@ -254,6 +255,7 @@ def init_tuple_keyword(node):
   
 def init_func_info(func):
     func.info[func.name]                = []
+    func.info[func.type]                = []
     func.info[func.sm_state]            = []
     func.info[func.desc_data_retval]    = []
     func.info[func.desc_data_remove]    = []

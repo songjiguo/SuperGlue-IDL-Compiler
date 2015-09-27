@@ -42,6 +42,8 @@ typedef unsigned int u32_t;
 typedef unsigned short int us32_t;
 typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
+
+struct usr_inv_cap {int a;};
 # 5 "cidl.h" 2
 
 struct global_info {
@@ -86,6 +88,6 @@ twritep(spdid_t spdid,
  int resource_data(tid, cbid),
  int sz);
 
-void
+int
 trelease(spdid_t spdid,
   td_t CD_desc_terminate_CD_tid);

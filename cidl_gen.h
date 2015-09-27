@@ -35,6 +35,10 @@ typedef unsigned short int us32_t;
 typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
+struct usr_inv_cap {int a;};
+
+#define CVECT_CREATE_STATIC(x)
+#define CSLAB_CREATE(x, y)
 #define service_global_info struct global_info
 
 #define sm_creation(x) void SM_creation_SM_##x
@@ -54,6 +58,6 @@ typedef unsigned long long ull_t;
 	CD_desc_data_retval_CD_##x##_CD_##y
 #define desc_terminate(x)	CD_desc_terminate_CD_##x
 
-
+#define CSTUB_FN(x, y) x y
 
 #endif /* _cos_idl_h */

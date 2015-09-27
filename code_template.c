@@ -1,37 +1,24 @@
 /*****************************/
 /*  ds, inside function etc. used as fake header for now */
 /*****************************/
-// client header start
+// client track start
 struct IDL_desc_track
 
 static volatile unsigned long global_fault_cnt = 0;
 
-// TODO: implement them
-static inline void call_update_id(int old_id, int new_id) {}
-static inline int call_introspect_creator(int id) {}
-static inline void call_recover_upcall(int dest_spd, int id) {}
-static inline void call_restore_data(struct desc_track *desc) {}
-static inline void call_save_data(int id, void *data) {}
-static inline struct desc_track *call_desc_alloc() {}
-static inline void call_desc_dealloc(struct desc_track *desc) {}
-static inline struct desc_track *call_desc_lookup(int id) {}
-static inline struct desc_track *call_desc_update(int id) {}
-static inline void call_desc_rec_state(struct desc_track *desc) {}
+/* tracking thread state for data recovery */
+CVECT_CREATE_STATIC(rd_vect);
+CSLAB_CREATE(rdservice, sizeof(struct desc_track));
 
-/* track client id, server id and the parameters here */
-// TODO: what else to track??
-static inline void call_desc_cons(struct desc_track *desc, int id, int server_id, IDL_desc_saved_params) {}
-//static inline void call_desc_cons(struct desc_track *desc, IDL_desc_track_fields) {}
-
-// client header end
-
+// client track end
 
 // client sm start 
+typedef int (*generic_fp)(void);
+generic_fp state_fn[IDL_fn_list_len] = { IDL_fn_list };
 
-int (* state[])(void) = { IDL_fn_list };
+
 enum state_codes { IDL_state_list };
-
-enum ret_codes { ok, again, fault };
+enum ret_codes { ok, again, faulty };
 struct transition {
 	enum state_codes curr_state;
 	enum state_codes next_state;
@@ -42,8 +29,7 @@ struct transition {
 struct transition state_transitions[] = {
 	IDL_transition_rules
 };
-
-// client sm end 
+// client sm end
 
 ///////////////////////////////////////////////
 /*****************************/
@@ -91,7 +77,7 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 			block_cli_if_recover(IDL_id);
 			block_cli_if_recover_subtree(IDL_id);
 		}
-		call_update_id(IDL_id, desc->server_id);
+		IDL_id = desc->server_id;
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
 	} else {  // could be created in different component
 		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
@@ -357,3 +343,105 @@ static inline void block_cli_if_recover_upcall_entry(int id) {
 static inline void block_cli_if_recover_upcall_entry(int id) {
 }
 // block_cli_if_recover_upcall_entry no match end
+
+
+// client cstub start
+
+CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl)
+{
+        long fault = 0;
+        long ret;
+	struct desc_track *rd = NULL;
+redo:
+//	rd = rd_update(cos_get_thd_id(), thd_id, THD_STATE_BLOCK);
+//	call_desc_update();
+        assert(rd);
+
+	block_cli_if_invoke_IDL_fname(IDL_params); 
+        //CSTUB_INVOKE(ret, fault, uc, 2, spdid, thd_id);
+        if (unlikely (fault)){
+//		CSTUB_FAULT_UPDATE();
+                goto redo;
+        }
+ 
+        assert(rd);
+//        rd->state = THD_STATE_RUNNING;
+ 
+        return ret;
+}
+
+typedef int (*ptr_IDL_fname)(IDL_parsdecl);
+
+// client cstub end
+
+
+
+// client func decl start
+
+static inline struct desc_track *
+call_desc_lookup(int id) 
+{
+	return (struct desc_track *)cvect_lookup(&rd_vect, id);
+}
+
+static inline struct desc_track *
+call_desc_alloc(int id) 
+{
+	struct desc_track *_desc_track;
+
+	_desc_track = (struct desc_track *)cslab_alloc_rdservice();
+	assert(_desc_track);
+	if (cvect_add(&rd_vect, _desc_track, id)) {
+		assert(0);
+	}
+	_desc_track->tid = id;
+	return _desc_track;
+}
+
+static inline void 
+call_desc_dealloc(struct desc_track *desc) 
+{
+	assert(desc);
+	assert(!cvect_del(&rd_vect, desc->tid));
+	cslab_free_rdservice(desc);
+}
+
+static inline void 
+call_desc_cons(struct desc_track *desc, int id, int server_id, IDL_desc_saved_params) 
+{
+	assert(desc);
+
+	desc->tid = id;
+	desc->server_id = server_id;
+	IDL_desc_cons;
+	return;
+}
+
+static inline struct desc_track *
+call_desc_update(int id, int state) 
+{
+	struct desc_track *desc = NULL;
+	
+        desc = call_desc_lookup(id);
+	if (unlikely(!desc)) goto done;
+
+	if (likely(desc->fault_cnt == global_fault_cnt)) goto done;
+	desc->fault_cnt = global_fault_cnt;
+
+
+	// State machine transition
+	IDL_state_list;
+	
+done:	
+	return desc;
+
+}
+
+static inline int call_introspect_creator(int id) {}
+static inline void call_recover_upcall(int dest_spd, int id) {}
+static inline void call_restore_data(struct desc_track *desc) {}
+static inline void call_save_data(int id, void *data) {}
+static inline void call_desc_rec_state(struct desc_track *desc) {}
+
+
+// client func decl end

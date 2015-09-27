@@ -200,6 +200,7 @@ def parse_func(node):
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
     #pprint (result.tuple[0].sm_info)
+    fun_info[fun.name] = node.type.declname # set the function name
     for k, v in result.tuple[-1].sm_info.iteritems():
         #print(k)
         #print(v)
@@ -207,7 +208,6 @@ def parse_func(node):
         #print()
         if (node.type.declname == v): 
             fun_info[fun.sm_state]  = k
-        fun_info[fun.name]      = node.type.declname # set creation  or terminal func
     if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
         fun_info[fun.sm_state]  = "transition"
 
@@ -237,13 +237,19 @@ def parse_func(node):
           
     #### return of a function ####        
     func_return = parse_idl_str('CD', str(get_dec_type_name(node)[0]))
-    if (not func_return[0]):
-        func_return[0] = node.type.type.names[0]
+    
+    if (not func_return[0]):   # normal return
+        #print(node.type.type.names[0])
+        #func_return[0] = node.type.type.names[0]
+        fun_info[fun.type] = node.type.type.names[0]  # add type
+    else:   # if there is "CD"
+        fun_info[fun.type] = func_return[1]           # add type
+        #print(func_return[0])
+        #print (func_return[1])
+        fun_info[func_return[0]] = func_return[1:]   # add into dict -- key, val
                 
-    construct_desc_fields(func_return)   # construct desc tracking fields    
-    
-    fun_info[func_return[0]] = func_return[1:]
-    
+    construct_desc_fields(func_return)   # construct desc tracking fields
+        
     #print (result.tuple[-1].functions[-1].normal_para)
     #print (result.tuple[-1].functions[-1].info)
 

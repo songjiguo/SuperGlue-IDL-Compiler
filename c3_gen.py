@@ -18,6 +18,7 @@ import subprocess
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int server_id"
 desc_track_fault_cnt = "unsigned long long fault_cnt"
+desc_track_state = "unsigned int state"
 
 class MyCode():
     def __init__(self):
@@ -153,6 +154,13 @@ def replace_params(result, fdesc, code):
     code = code.replace("IDL_pars_len", str(len(param_list)))
     code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
     code = code.replace("IDL_fname", name)
+
+    for tup in result.tuple:
+        for func in tup.functions:
+            if (fdesc[0] == func.info["funcname"]):
+                #print(func.info["funcname"])
+                #print(func.info["functype"])
+                code = code.replace("IDL_fntype", func.info["functype"])
     
     if (id):
         code =  code.replace("IDL_id", id)
@@ -195,28 +203,52 @@ def post_process(result, IFcode, IFDesc):
             code = code.replace("IDL_parent_id", parent_id)
             IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
 
-            code = IFcode["header"]
+            code = IFcode["internal function"]
             code = code.replace("IDL_desc_saved_params", ', '.join(paramdecl_list))
-            IFcode["header"] = code
+            IFcode["internal function"] = code
+
+            # ensure the same name here
+            tmp = ""
+            for item in paramdecl_list:
+                tmp = tmp + "desc->" + item.split(" ")[-1] + " = " + item.split(" ")[-1] + ";\n        "
+     
+            code = IFcode["internal function"]
+            code = code.replace("IDL_desc_cons;", tmp)
+            IFcode["internal function"] = code
+            #===================================================================
+            # # construct the code for cons
+            # for item in result.gvars["desc_data"]:
+            #     print(item[1])
+            # print()
+            # for item in paramdecl_list:
+            #     print (item.split(" ")[-1])
+            #===================================================================
+            
     
+    #exit()
 ########################
 # generating functions
 ########################
 def generate_globalvas(result, IFcode):
-    cmd = 'sed -nr \"/\<client header start\>/{:a;n;/'\
-          '\<client header end\>/b;p;ba} \" code_template.c'
+    
+    # desc_track   (actual struct)
+    cmd = 'sed -nr \"/\<client track start\>/{:a;n;/'\
+          '\<client track end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code.split())
     #pprint(result.gvars["desc_data"])  
 
-    # desc_track   (actual struct)
     tmp = "\n" + code.split()[0] + " " + code.split()[1] + " { \n"
     for item in result.gvars["desc_data"]:
         tmp = tmp + "    " + " ".join(item) + ";\n"
-    tmp = tmp + "    " + desc_track_server_id + ";\n"  # transparent to the user
+        
+    # transparent to the user
+    tmp = tmp + "    " + desc_track_state + ";\n"  
+    tmp = tmp + "    " + desc_track_server_id + ";\n"
     tmp = tmp + "    " + desc_track_fault_cnt + ";"
     tmp = tmp + "\n};\n"  
+    
     code = code.replace("struct IDL_desc_track\n", tmp) # only replace a line, not everywhere
     code = code.replace("struct IDL_desc_track", "struct desc_track") # only replace a line, not everywhere
 
@@ -226,11 +258,18 @@ def generate_globalvas(result, IFcode):
         tmp = tmp + " ".join(item) + ", "
     code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
 
-    # header files
+    # internal function files
     code = r'''#include "cidl_gen.h"''' + "\n" + code 
-    
-    #print (code)  
-    IFcode["header"] = code  
+
+    IFcode["tracking"] = code
+
+    # function declarations
+    cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
+          '\<client func decl end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+          
+    IFcode["internal function"] = code  
 
 # the function pointer decl blocks    
 def generate_fnptr(funcblocks, globalblocks, IFcode):
@@ -253,7 +292,7 @@ def generate_fnptr(funcblocks, globalblocks, IFcode):
 
 def generate_gblocks(globalblocks, IFDesc, IFcode):
     # the global blocks
-    IFcode["header"] = IFcode["header"] + "//group: block function declarations \n"
+    IFcode["internal function"] = IFcode["internal function"] + "//group: block function declarations \n"
     if (globalblocks):
         __IFcode = {}
         for gblk in globalblocks:
@@ -263,22 +302,31 @@ def generate_gblocks(globalblocks, IFDesc, IFcode):
                 __IFcode[name] = code
                 # now write out static function declarations!!!
                 #print (code.split('\n', 1)[0])
-                IFcode["header"] = IFcode["header"] + code.split('\n', 1)[0][:-2]+";" + "\n"
+                IFcode["internal function"] = IFcode["internal function"] + code.split('\n', 1)[0][:-2]+";" + "\n"
     IFcode["global"] = __IFcode
     #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])     
     #exit()          
 
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     no_match_code_list = []
-    # the function blocks    
+    
+    # construct cstub warpper for each function 
+    cmd = 'sed -nr \"/\<client cstub start\>/{:a;n;/'\
+          '\<client cstub end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["cstub"] = code
+    
+    # evaluate function blocks (and also generate cstub code here)
+    cstub_code = ""     
     for fdesc in IFDesc[1]:
-        __IFcode = {}        
+        __IFcode = {}   
         for fblk in funcblocks:
             #fblk.show()
             name, code = condition_eval(fblk, (IFDesc[0], fdesc)) 
             code = replace_params(result, fdesc, code)
-            
-            if (name == "no match"):
+
+            if (name == "no match"):   # empty body
                 if (code not in no_match_code_list):
                     no_match_code_list.append(code)
                 continue;
@@ -286,18 +334,22 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             if (name and code):
                 __IFcode[name] = code
                 # now write out static function declarations!!!
-                IFcode["header"] = IFcode["header"] + code.split('\n', 1)[0][:-2]+";" + "\n"
+                IFcode["internal function"] = IFcode["internal function"] + code.split('\n', 1)[0][:-2]+";" + "\n"
         IFcode[fdesc[0]] = __IFcode
+    
+        code = IFcode["cstub"]
+        #print (code)
+        cstub_code = cstub_code + replace_params(result, fdesc, code)
+
+    # construct cstub warpper for each function 
+    IFcode["cstub"] = cstub_code
 
     # this is the non-match list and should be empty static inline function
-    IFcode["header"] = IFcode["header"] + "\n//group: empty block function implementation"    
-    IFcode["header"] = IFcode["header"] + '\n' + ''.join(no_match_code_list)
+    IFcode["internal function"] = IFcode["internal function"] + "\n//group: empty block function implementation"    
+    IFcode["internal function"] = IFcode["internal function"] + '\n' + ''.join(no_match_code_list)
 
     #pprint(IFcode)
-    #exit()
-
-    post_process(result, IFcode, IFDesc)
-    
+    #exit()    
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
@@ -367,10 +419,15 @@ def generate_blocks(globalblocks, funcblocks):
 #===============================================================================
 def paste_idl_code(IFcode):
     
-    result_code = IFcode['header'] + "\n"
+    result_code = IFcode['tracking'] + "\n"
     
-    result_code = result_code + IFcode['sm'] + "\n"
-
+    result_code = result_code + IFcode['sm'] + "\n"       
+    
+    result_code = result_code + IFcode['internal function'] + "\n"
+    
+    #print(result_code)
+    #exit()
+    
     #===========================================================================
     # tmp_dict = IFcode['funptr']
     # for k, v in tmp_dict.iteritems():
@@ -384,9 +441,9 @@ def paste_idl_code(IFcode):
         #print(v)        
         result_code = result_code + v
         result_code = result_code + "\n"
-
+        
     #===========================================================================
-    # tmp_dict = IFcode['header']
+    # tmp_dict = IFcode['internal function']
     # for k, v in tmp_dict.iteritems():
     #     #print(v)        
     #     result_code = result_code + v
@@ -394,14 +451,16 @@ def paste_idl_code(IFcode):
     #===========================================================================
     
     for kname, vdict in IFcode.iteritems():
-        if (kname == "funptr" or kname == "global" or kname == "header" or kname == "sm"):
+        if (kname == "funptr" or kname == "global" or kname == "cstub" or 
+            kname == "internal function" or kname == "sm" or kname == "tracking"):
             continue
         for k, v in vdict.iteritems():
             #print(v)
             result_code = result_code + v
             result_code = result_code + "\n"       
     
-    #print (result_code)    
+    result_code = result_code + IFcode['cstub'] + "\n" 
+    
     
     # make a fake main function for testing only
     fake_main = r"""
@@ -411,9 +470,13 @@ int main()
     return 0;
 }
 """
+
     result_code = result_code + "\n" + fake_main
     
+    
     #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])    
+
+    #exit()
 
     # write out the result to the file (easier debug)
     output_file = "output.c"
@@ -438,6 +501,21 @@ def intersect(a, b):
  
 def difference(a,b): 
     return list(set(a) - set(b))
+
+def build_fault_transition(ft_list, item1, item2):
+    ft_list.append("{"+ item1 + ", " + item2 + ", " 
+                                 + "faulty" + "}" +",\n       ") 
+
+def find_recover_state_transition(fault_transition_list, from_list, to_list, to_item):
+    idx = 0;
+    ret = ""
+    for item in to_list:
+        if (item == to_item):
+            if (from_list[idx] not in to_list):  # ignore the one that also on the to_list
+                ret = from_list[idx]           
+        idx = idx + 1
+    if (ret):
+        build_fault_transition(fault_transition_list, to_item, ret)
  
 def construct_fault_transition(from_list, to_list):
     fault_transition_list = []
@@ -448,41 +526,35 @@ def construct_fault_transition(from_list, to_list):
     #for item in to_list:
     #    print(item)
 
+    # assumption: only 1 creation
     tmp = difference(from_list, to_list)  # only in from_list (must be creation)
     if (tmp):
-        fault_transition_list.append("{"+ tmp[0] + ", " + tmp[0] + ", " 
-                                     + "fault" + "}" +",\n       ")   
+        build_fault_transition(fault_transition_list, tmp[0], tmp[0])           
     
+    # assumption: only 1 terminal
     tmp = difference(to_list, from_list)  # only in to_list (must be terminal)
-    idx = 0;
-    ret = ""
-    for item in to_list:
-        if (item == tmp[0]):
-            #print (to_list[idx])
-            if (from_list[idx] not in to_list):  # ignore the one that also on the to_list
-                ret = from_list[idx]            
-        idx = idx + 1
+    find_recover_state_transition(fault_transition_list, from_list, to_list, tmp[0])
     
-    if (ret):
-        fault_transition_list.append("{"+  tmp[0] + ", " + ret + ", " 
-                                     + "fault" + "}" +",\n       ")  
     
     tmp = intersect(from_list, to_list)   # in both from_list and to_list
     for new_item in tmp:
-        idx = 0;
-        ret = ""
-        for item in to_list:
-            if (item == new_item):
-                #print (to_list[idx])
-                if (from_list[idx] not in to_list):  # ignore the one that also on the to_list
-                    ret = from_list[idx]            
-            idx = idx + 1
-        if (ret):
-            fault_transition_list.append("{"+  new_item + ", " + ret + ", " 
-                                         + "fault" + "}" +",\n       ")  
-    
+        find_recover_state_transition(fault_transition_list, from_list, to_list, new_item)
+
     return fault_transition_list
         
+def construct_sm_recovery(fn_list, transition_list, state_list, IFcode):
+    code = IFcode["internal function"]
+    
+    tmp = "switch (state) {\n"
+    
+    for item in state_list:
+        tmp = tmp + "            case " + item + ":\n" + "        //recovery code\n"
+        
+    tmp = tmp + "default " +  ":\n" + "        assert(0);\n }"
+    #print (tmp)
+    code = code.replace("IDL_state_list", tmp)
+    IFcode["internal function"] = code
+    #exit()        
     
 def generate_sm_transition(result, funcblocks, IFcode):    
     #print("constructing SM transition")
@@ -533,15 +605,22 @@ def generate_sm_transition(result, funcblocks, IFcode):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     #print (code)
-
+    fn_list = map(lambda x:"(generic_fp)"+x, fn_list)
+    #print(fn_list)
+    
+    code = code.replace("IDL_fn_list_len", str(len(fn_list)))
     code = code.replace("IDL_fn_list", ', '.join(fn_list))
     code = code.replace("IDL_state_list", ', '.join(state_list))
     code = code.replace("IDL_transition_rules", ' '.join(transition_list))
     
     #print (code)  
+    #exit()
     IFcode["sm"] = code  
     #print(IFcode["sm"])
     #exit()    
+
+    # update the SM transition function for recovery
+    construct_sm_recovery(fn_list, transition_list,state_list, IFcode)
     
 #===============================================================================
 # the function to process passed in result and generate block code
@@ -578,9 +657,12 @@ def idl_generate(result, parsed_ast):
     generate_gblocks(globalblocks, IFDesc, IFcode)
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
     
+    # post process
+    post_process(result, IFcode, IFDesc)
+    
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
-
+    
     #pprint (IFcode)
     #exit()
     paste_idl_code(IFcode)   # make some further process here

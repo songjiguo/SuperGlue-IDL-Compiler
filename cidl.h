@@ -45,7 +45,7 @@ twritep(spdid_t spdid,
 	int resource_data(tid, cbid), 
 	int sz);
 
-void
+int
 trelease(spdid_t spdid,
 	 td_t desc_terminate(tid));
 
