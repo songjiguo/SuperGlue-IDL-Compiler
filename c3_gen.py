@@ -13,7 +13,6 @@ from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
 from pprint import pprint
 
 import keywords, sys, os
-import subprocess
 
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int server_id"
@@ -203,41 +202,25 @@ def post_process(result, IFcode, IFDesc):
             code = code.replace("IDL_parent_id", parent_id)
             IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code
 
-            code = IFcode["internal function"]
+            code = IFcode["internalfn"]
             code = code.replace("IDL_desc_saved_params", ', '.join(paramdecl_list))
-            IFcode["internal function"] = code
+            IFcode["internalfn"] = code
 
             # ensure the same name here
             tmp = ""
             for item in paramdecl_list:
-                tmp = tmp + "desc->" + item.split(" ")[-1] + " = " + item.split(" ")[-1] + ";\n        "
+                tmp = tmp + "desc->" + item.split(" ")[-1] + " = " + item.split(" ")[-1] + ";\n"
      
-            code = IFcode["internal function"]
+            code = IFcode["internalfn"]
             code = code.replace("IDL_desc_cons;", tmp)
-            IFcode["internal function"] = code
-            #===================================================================
-            # # construct the code for cons
-            # for item in result.gvars["desc_data"]:
-            #     print(item[1])
-            # print()
-            # for item in paramdecl_list:
-            #     print (item.split(" ")[-1])
-            #===================================================================
-            
-    
-    #exit()
+            IFcode["internalfn"] = code
+
 ########################
 # generating functions
 ########################
 def generate_globalvas(result, IFcode):
     
-    # desc_track   (actual struct)
-    cmd = 'sed -nr \"/\<client track start\>/{:a;n;/'\
-          '\<client track end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    #print (code.split())
-    #pprint(result.gvars["desc_data"])  
+    code = IFcode["trackds"]
 
     tmp = "\n" + code.split()[0] + " " + code.split()[1] + " { \n"
     for item in result.gvars["desc_data"]:
@@ -261,15 +244,7 @@ def generate_globalvas(result, IFcode):
     # internal function files
     code = r'''#include "cidl_gen.h"''' + "\n" + code 
 
-    IFcode["tracking"] = code
-
-    # function declarations
-    cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
-          '\<client func decl end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-          
-    IFcode["internal function"] = code  
+    IFcode["trackds"] = code
 
 # the function pointer decl blocks    
 def generate_fnptr(funcblocks, globalblocks, IFcode):
@@ -292,33 +267,30 @@ def generate_fnptr(funcblocks, globalblocks, IFcode):
 
 def generate_gblocks(globalblocks, IFDesc, IFcode):
     # the global blocks
-    IFcode["internal function"] = IFcode["internal function"] + "//group: block function declarations \n"
+    IFcode["internalfn"] = IFcode["internalfn"] + "//group: block function declarations \n"
     if (globalblocks):
         __IFcode = {}
         for gblk in globalblocks:
             #print (gblk.list)
             name, code= condition_eval(gblk, (IFDesc[0], None))
             if (name and code):    # there should be any params, otherwise it should be function
+                
                 __IFcode[name] = code
                 # now write out static function declarations!!!
                 #print (code.split('\n', 1)[0])
-                IFcode["internal function"] = IFcode["internal function"] + code.split('\n', 1)[0][:-2]+";" + "\n"
+                IFcode["internalfn"] = IFcode["internalfn"] + code.split('\n', 1)[0][:-2]+";" + "\n"
     IFcode["global"] = __IFcode
-    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])     
-    #exit()          
-
+    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])  
+    
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     no_match_code_list = []
-    
-    # construct cstub warpper for each function 
-    cmd = 'sed -nr \"/\<client cstub start\>/{:a;n;/'\
-          '\<client cstub end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["cstub"] = code
+ 
+#    read_from_code_template(IFcode)
     
     # evaluate function blocks (and also generate cstub code here)
-    cstub_code = ""     
+    cstub_code   = ""
+    fptr_typedef = ""
+    fptr_dict    = {}    
     for fdesc in IFDesc[1]:
         __IFcode = {}   
         for fblk in funcblocks:
@@ -334,19 +306,24 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             if (name and code):
                 __IFcode[name] = code
                 # now write out static function declarations!!!
-                IFcode["internal function"] = IFcode["internal function"] + code.split('\n', 1)[0][:-2]+";" + "\n"
+                IFcode["internalfn"] = IFcode["internalfn"] + code.split('\n', 1)[0][:-2]+";" + "\n"
         IFcode[fdesc[0]] = __IFcode
     
         code = IFcode["cstub"]
-        #print (code)
         cstub_code = cstub_code + replace_params(result, fdesc, code)
-
+        code = IFcode["state_fptr_typedef"]
+        fptr_typedef = fptr_typedef + replace_params(result, fdesc, code)
+        code = IFcode["state_fptr"]
+        fptr_dict["state_"+fdesc[0]] = replace_params(result, fdesc, code)
+        
     # construct cstub warpper for each function 
     IFcode["cstub"] = cstub_code
-
+    IFcode["state_fptr_typedef"] = fptr_typedef
+    IFcode["state_fptr"] = fptr_dict
+   
     # this is the non-match list and should be empty static inline function
-    IFcode["internal function"] = IFcode["internal function"] + "\n//group: empty block function implementation"    
-    IFcode["internal function"] = IFcode["internal function"] + '\n' + ''.join(no_match_code_list)
+    IFcode["internalfn"] = IFcode["internalfn"] + "\n//group: empty block function implementation"    
+    IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
 
     #pprint(IFcode)
     #exit()    
@@ -386,17 +363,11 @@ def generate_description(result, funcdescps, globaldescp):
 #  init blocks of (predicate, code) 
 def generate_blocks(globalblocks, funcblocks):
     
-    # no need to do this anymore
-    #===========================================================================
-    # # transform the predefine code for further processing (e.g., add "\n")
-    # cmd = 'sed -f pred\_code\/convert.sed pred\_code\/code.c > pred\_code\/tmpcode'
-    # subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    #===========================================================================
-    
     fblk = []
     gblk = []
     
     fblk.append(keywords.block_cli_if_invoke())
+    fblk.append(keywords.block_cli_if_desc_update())
     fblk.append(keywords.block_cli_if_invoke_ser_intro())
     fblk.append(keywords.block_cli_if_recover_subtree())
     fblk.append(keywords.block_cli_if_track())  
@@ -419,40 +390,21 @@ def generate_blocks(globalblocks, funcblocks):
 #===============================================================================
 def paste_idl_code(IFcode):
     
-    result_code = IFcode['tracking'] + "\n"
+    result_code = IFcode['trackds'] + "\n"    
+    result_code = result_code + IFcode['sm'] + "\n"
+    result_code = result_code + IFcode['state_fptr_typedef'] + "\n"
+    result_code = result_code + IFcode['internalfn'] + "\n"
     
-    result_code = result_code + IFcode['sm'] + "\n"       
-    
-    result_code = result_code + IFcode['internal function'] + "\n"
-    
-    #print(result_code)
-    #exit()
-    
-    #===========================================================================
-    # tmp_dict = IFcode['funptr']
-    # for k, v in tmp_dict.iteritems():
-    #     #print(v)
-    #     result_code = result_code + v
-    # result_code = result_code + "\n"
-    #===========================================================================
-       
     tmp_dict = IFcode['global']
     for k, v in tmp_dict.iteritems():
         #print(v)        
         result_code = result_code + v
         result_code = result_code + "\n"
         
-    #===========================================================================
-    # tmp_dict = IFcode['internal function']
-    # for k, v in tmp_dict.iteritems():
-    #     #print(v)        
-    #     result_code = result_code + v
-    #     result_code = result_code + "\n"
-    #===========================================================================
-    
     for kname, vdict in IFcode.iteritems():
-        if (kname == "funptr" or kname == "global" or kname == "cstub" or 
-            kname == "internal function" or kname == "sm" or kname == "tracking"):
+        if (kname == "funptr" or kname == "global" or kname == "cstub" or kname == "sm_funptr" or
+            kname == "internalfn" or kname == "sm" or kname == "trackds" or 
+            kname == "state_fptr" or kname == "state_fptr_typedef"):
             continue
         for k, v in vdict.iteritems():
             #print(v)
@@ -460,7 +412,7 @@ def paste_idl_code(IFcode):
             result_code = result_code + "\n"       
     
     result_code = result_code + IFcode['cstub'] + "\n" 
-    
+    result_code = result_code + IFcode['sm_funptr'] + "\n"       
     
     # make a fake main function for testing only
     fake_main = r"""
@@ -470,19 +422,17 @@ int main()
     return 0;
 }
 """
-
     result_code = result_code + "\n" + fake_main
     
-    
-    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])    
-
     #exit()
-
+    
     # write out the result to the file (easier debug)
     output_file = "output.c"
     with open(output_file, "w") as text_file:
         text_file.write("{0}".format(result_code))
-        
+    
+    os.system("indent -kr output.c") 
+    
     #os.system("cat output.c")        
     #exit()
     
@@ -504,7 +454,7 @@ def difference(a,b):
 
 def build_fault_transition(ft_list, item1, item2):
     ft_list.append("{"+ item1 + ", " + item2 + ", " 
-                                 + "faulty" + "}" +",\n       ") 
+                                 + "faulty" + "}" +",\n") 
 
 def find_recover_state_transition(fault_transition_list, from_list, to_list, to_item):
     idx = 0;
@@ -519,18 +469,13 @@ def find_recover_state_transition(fault_transition_list, from_list, to_list, to_
  
 def construct_fault_transition(from_list, to_list):
     fault_transition_list = []
-    tmp = []
-    #for item in from_list:
-    #    print(item)
-    #print()
-    #for item in to_list:
-    #    print(item)
-
+        
     # assumption: only 1 creation
-    tmp = difference(from_list, to_list)  # only in from_list (must be creation)
+    tmp = difference(from_list, to_list)  # only in from_list (must be init and creation)
     if (tmp):
-        build_fault_transition(fault_transition_list, tmp[0], tmp[0])           
+        build_fault_transition(fault_transition_list, tmp[0], tmp[0])
     
+    #exit()
     # assumption: only 1 terminal
     tmp = difference(to_list, from_list)  # only in to_list (must be terminal)
     find_recover_state_transition(fault_transition_list, from_list, to_list, tmp[0])
@@ -541,21 +486,17 @@ def construct_fault_transition(from_list, to_list):
         find_recover_state_transition(fault_transition_list, from_list, to_list, new_item)
 
     return fault_transition_list
-        
-def construct_sm_recovery(fn_list, transition_list, state_list, IFcode):
-    code = IFcode["internal function"]
-    
-    tmp = "switch (state) {\n"
-    
-    for item in state_list:
-        tmp = tmp + "            case " + item + ":\n" + "        //recovery code\n"
-        
-    tmp = tmp + "default " +  ":\n" + "        assert(0);\n }"
-    #print (tmp)
-    code = code.replace("IDL_state_list", tmp)
-    IFcode["internal function"] = code
-    #exit()        
-    
+
+def construct_current_state(result, state_list, IFcode):    
+    # set the current state
+    for tup in result.tuple:
+        for func in tup.functions:
+            for item in state_list:
+                if (func.info[func.name] == item.split("state_")[1]):
+                    code = IFcode[func.info[func.name]]["BLOCK_CLI_IF_TRACK"]
+                    code = code.replace("IDL_curr_state", str(item))
+                    IFcode[func.info[func.name]]["BLOCK_CLI_IF_TRACK"]  = code
+                    
 def generate_sm_transition(result, funcblocks, IFcode):    
     #print("constructing SM transition")
     
@@ -579,7 +520,6 @@ def generate_sm_transition(result, funcblocks, IFcode):
                 fn_list.append(func.info[func.name])
                 state_list.append("state_"+func.info[func.name])
                  
-        #pprint (tup.sm_info["transition"])
         for item in tup.sm_info["transition"]:
             from_list.append("state_" + item[0])
             to_list.append("state_" + item[1])
@@ -591,36 +531,54 @@ def generate_sm_transition(result, funcblocks, IFcode):
                 tmp_str = "again"
             transition_list.append("{"+ "state_"+ item[0] + ", " + 
                                    "state_" + item[1] + ", " + 
-                                   tmp_str + "}" +",\n       ")    
-    
+                                   tmp_str + "}" +",\n")
+            
     # now construct the transition under the fault situation (from 2 lists)
-
     fault_transition = construct_fault_transition(from_list, to_list)
     for item in fault_transition:
         transition_list.append(item) 
-       
         
-    cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
-          '\<client sm end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    #print (code)
-    fn_list = map(lambda x:"(generic_fp)"+x, fn_list)
-    #print(fn_list)
-    
-    code = code.replace("IDL_fn_list_len", str(len(fn_list)))
-    code = code.replace("IDL_fn_list", ', '.join(fn_list))
-    code = code.replace("IDL_state_list", ', '.join(state_list))
-    code = code.replace("IDL_transition_rules", ' '.join(transition_list))
-    
-    #print (code)  
-    #exit()
-    IFcode["sm"] = code  
-    #print(IFcode["sm"])
-    #exit()    
 
-    # update the SM transition function for recovery
-    construct_sm_recovery(fn_list, transition_list,state_list, IFcode)
+    code = IFcode["sm_funptr"]    
+    gen_fn_list = map(lambda x:"(generic_fp)"+x, fn_list)
+    #print(fn_list)     
+    code = code.replace("IDL_fn_list_len", str(len(gen_fn_list)))
+    code = code.replace("IDL_fn_list", ', '.join(gen_fn_list))
+    IFcode["sm_funptr"] = code
+
+    code = IFcode["sm"]
+    #state_list = [x.upper() for x in state_list]
+    code = code.replace("IDL_state_list", ', '.join(state_list))
+    
+    #pprint(transition_list)
+    #exit()
+    code = code.replace("IDL_transition_rules", ' '.join(transition_list))
+    IFcode["sm"] = code  
+    # update the SM state and transition function for recovery
+    construct_current_state(result, state_list, IFcode)
+
+    # this is the key to the c3 recovery
+    recover_sm_transition(fn_list, transition_list,state_list, IFcode)
+    
+#===============================================================================
+# This is the main function to generate the state transition for recovery    
+#===============================================================================
+def recover_sm_transition(fn_list, transition_list, state_list, IFcode):
+    
+    #pprint(IFcode["state_fptr"])
+    code = IFcode["internalfn"]
+    
+    tmp = "switch (state) {\n"
+    
+    for item in state_list:
+        _code = IFcode["state_fptr"][item]
+        print(_code)
+        tmp = tmp + "case " + item + ":\n" + _code + "break;\n"
+        
+    tmp = tmp + "default " +  ":\n" + "assert(0);\n }"
+
+    code = code.replace("IDL_state_list", tmp)
+    IFcode["internalfn"] = code
     
 #===============================================================================
 # the function to process passed in result and generate block code
@@ -643,11 +601,9 @@ def idl_generate(result, parsed_ast):
     # pprint (result.tuple[0].functions[2].info)
     # pprint (result.tuple[0].functions[3].info)
     #===========================================================================
-    #pprint (result.tuple[0].functions[1].info['funcname'])
-    #exit()
 
-    IFDesc = (globaldescp, funcdescps)    
-
+    keywords.read_from_template_code(IFcode)    
+    IFDesc = (globaldescp, funcdescps)
     # build blocks and descriptions
     generate_description(result, funcdescps, globaldescp)  
     generate_blocks(globalblocks, funcblocks)
@@ -662,7 +618,7 @@ def idl_generate(result, parsed_ast):
     
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
-    
+   
     #pprint (IFcode)
     #exit()
     paste_idl_code(IFcode)   # make some further process here

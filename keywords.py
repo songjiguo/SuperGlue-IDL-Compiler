@@ -160,12 +160,62 @@ def block_cli_if_invoke_ser_intro():
     printc ("")
     return BLOCK_CLI_IF_INVOKE_SER_INTRO
 
+def block_cli_if_desc_update():
+    BLOCK_CLI_IF_DESC_UPDATE = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE, "BLOCK_CLI_IF_DESC_UPDATE")
+    printc (BLOCK_CLI_IF_DESC_UPDATE.list)
+    printc ("")
+    return BLOCK_CLI_IF_DESC_UPDATE
+
 def block_cli_if_invoke():
     BLOCK_CLI_IF_INVOKE = IDLBlock()    
     build_blk_code(BLOCK_CLI_IF_INVOKE, "BLOCK_CLI_IF_INVOKE")
     printc (BLOCK_CLI_IF_INVOKE.list)
     printc ("")
     return BLOCK_CLI_IF_INVOKE
+
+def read_from_template_code(IFcode):
+    cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
+          '\<client sm end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["sm"] = code    
+    
+    cmd = 'sed -nr \"/\<client sm_funptr start\>/{:a;n;/'\
+          '\<client sm_funptr end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["sm_funptr"] = code
+        
+    cmd = 'sed -nr \"/\<client track start\>/{:a;n;/'\
+          '\<client track end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["trackds"] = code
+    
+    cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
+          '\<client func decl end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()          
+    IFcode["internalfn"] = code      
+    
+    cmd = 'sed -nr \"/\<client cstub start\>/{:a;n;/'\
+          '\<client cstub end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["cstub"] = code
+    
+    cmd = 'sed -nr \"/\<client state_fptr start\>/{:a;n;/'\
+          '\<client state_fptr end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["state_fptr"] = code    
+    
+    cmd = 'sed -nr \"/\<client state_fptr_typedef start\>/{:a;n;/'\
+          '\<client state_fptr_typedef end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["state_fptr_typedef"] = code
 
 
 #===========================================================================
