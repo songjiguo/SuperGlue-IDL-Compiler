@@ -12,13 +12,24 @@ enum {
 	terminal
 };
 
-typedef int desc_close;
-typedef int desc_dep_create;
-typedef int desc_dep_close;
-typedef int desc_global;
-typedef int desc_block;
-typedef int desc_has_data;
-typedef int resc_has_data;
+struct global_info {
+ 	int desc_close;
+ 	int desc_dep_create;
+ 	int desc_dep_close;
+ 	int desc_global;
+ 	int desc_block;
+ 	int desc_has_data;
+ 	int resc_has_data;
+};
+#define DESC_CLOSE 		.desc_close
+#define DESC_DEP_CREATE .desc_dep_create
+#define DESC_DEP_CLOSE 	.desc_dep_close
+#define DESC_GLOBAL 	.desc_global
+#define DESC_BLOCK 		.desc_block
+#define DESC_HAS_DATA 	.desc_has_data
+#define RESC_HAS_DATA 	.resc_has_data
+
+#define service_global_info struct global_info sgi
 
 typedef int tsplit_sm;
 typedef int trelease_sm;
@@ -37,10 +48,6 @@ typedef unsigned long long ull_t;
 
 struct usr_inv_cap {int a;};
 
-#define CVECT_CREATE_STATIC(x)
-#define CSLAB_CREATE(x, y)
-#define service_global_info struct global_info
-
 #define sm_creation(x) void SM_creation_SM_##x
 #define sm_terminal(x) void SM_terminal_SM_##x
 #define sm_transition(x, y) void SM_transition_SM_##x##_SM_##y
@@ -58,6 +65,9 @@ struct usr_inv_cap {int a;};
 	CD_desc_data_retval_CD_##x##_CD_##y
 #define desc_terminate(x)	CD_desc_terminate_CD_##x
 
+// this is only for AST paser, remove later
+#define CVECT_CREATE_STATIC(x) 
+#define CSLAB_CREATE(x, y)
 #define CSTUB_FN(x, y) x y
 
 #endif /* _cos_idl_h */

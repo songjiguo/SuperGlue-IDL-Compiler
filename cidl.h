@@ -3,14 +3,14 @@
 
 #include "cidl_gen.h"
 
-service_global_info {
-	desc_close         itself;
-	desc_dep_create    same;
-	desc_dep_close     keep;
-	desc_global        false;
-	desc_block         true;
-	desc_has_data      true;
-	resc_has_data      true;
+service_global_info = {
+        DESC_CLOSE 		= itself,
+        DESC_DEP_CREATE = same,
+        DESC_DEP_CLOSE 	= keep,
+        DESC_GLOBAL 	= false,
+        DESC_BLOCK 		= true,
+        DESC_HAS_DATA 	= true,
+        RESC_HAS_DATA 	= true,
 };
 
 sm_creation(tsplit);

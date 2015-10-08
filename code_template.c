@@ -1,6 +1,3 @@
-/*****************************/
-/*  ds, inside function etc. used as fake header for now */
-/*****************************/
 // client track start
 struct IDL_desc_track
 
@@ -14,7 +11,8 @@ CSLAB_CREATE(rdservice, sizeof(struct desc_track));
 
 // client sm_funptr start 
 typedef int (*generic_fp)(void);
-generic_fp state_fn[IDL_fn_list_len] = { IDL_fn_list };
+generic_fp state_fn[IDL_fn_list_len] = { 
+	IDL_fn_list };
 // client sm_funptr end
 
 // client sm start 
@@ -24,6 +22,7 @@ struct transition {
 	enum state_codes curr_state;
 	enum state_codes next_state;
 	enum ret_codes   ret_code;
+	generic_fp       transit_fun;
 };
 
 /* transitions */
@@ -35,7 +34,8 @@ struct transition state_transitions[] = {
 ///////////////////////////////////////////////
 /*****************************/
 /* client block_cli_if_invoke */
-/*****************************/
+/* Note: the block with IDL is related to the function */
+///////////////////////////////////////////////
 
 // block_cli_if_invoke pred 1 start
 desc_dep_create_same|desc_dep_create_diff
@@ -47,11 +47,11 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 	if ((parent_desc = call_desc_lookup(IDL_parent_id))) {
 		IDL_parent_id = parent_desc->server_id;
 	}
-	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 	if (ret == -1) {   // parent desc not exist  TODO: change to error code
 		block_cli_if_recover(IDL_parent_id);
 		IDL_parent_id = parent_desc->server_id;
-		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 	}
 }
 // block_cli_if_invoke 1 end
@@ -62,7 +62,7 @@ creation
 // block_cli_if_invoke pred 2 end
 // block_cli_if_invoke 2 start
 static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
-	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 }
 // block_cli_if_invoke 2 end
 
@@ -75,13 +75,13 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	if (desc) {  // might be created in the same component
 		IDL_id = desc->server_id;
-		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 	} else {    // might be created in different component
-		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+		CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 		if (ret == -1) {   // desc not exist  TODO: change to error code
 			block_cli_if_recover(IDL_id);// need upcall
 			IDL_id = desc->server_id;
-			CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+			CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 		}
 	}
 }
@@ -96,7 +96,7 @@ static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	assert(desc);  // must be created in the same component
 	IDL_id = desc->server_id;
-	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
+	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
 }
 // block_cli_if_invoke 4 end
 
@@ -121,6 +121,16 @@ static inline void block_cli_if_desc_update_IDL_fname(int id) {
 	call_desc_update(id);
 }
 // block_cli_if_desc_update 1 end
+
+// block_cli_if_desc_update pred 2 start
+creation
+// block_cli_if_desc_update pred 2 end
+
+// block_cli_if_desc_update 2 start
+static inline void block_cli_if_desc_update_IDL_fname() {
+	
+}
+// block_cli_if_desc_update 2 end
 
 // block_cli_if_desc_update no match start
 static inline block_cli_if_desc_update_IDL_fname(int id) {
@@ -178,7 +188,7 @@ static inline void block_cli_if_basic_id(int id) {
 	assert(desc);
 	
 	int retval = 0;
-	retval = IDL_create_fname(IDL_desc_saved_params);
+	retval = IDL_fname(IDL_desc_saved_params);
 
 	//TODO: define the error code for non-recovered parent
 	if (retval == -99) {
@@ -283,7 +293,7 @@ creation
 static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	struct desc_track *desc = call_desc_alloc(ret);
 	assert(desc);
-	call_desc_save(desc, ret, IDL_params);
+	call_desc_cons(desc, ret, IDL_params);
 	desc->state = IDL_curr_state;
 }
 // block_cli_if_track 1 end
@@ -414,18 +424,19 @@ static inline void call_desc_dealloc(struct desc_track *desc) {
 	cslab_free_rdservice(desc);
 }
 
-static inline void call_desc_cons(struct desc_track *desc, int id, int server_id, IDL_desc_saved_params) {
+static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl) {
 	assert(desc);
 
 	desc->tid = id;
-	desc->server_id = server_id;
+	desc->server_id = id;
 	IDL_desc_cons;
 	return;
 }
 
 static inline struct desc_track *call_desc_update(int id) {
 	struct desc_track *desc = NULL;
-	unsigned int state = 0;
+	unsigned int from_state = 0;
+	unsigned int to_state = 0;
 
         desc = call_desc_lookup(id);
 	if (unlikely(!desc)) goto done;
@@ -433,14 +444,13 @@ static inline struct desc_track *call_desc_update(int id) {
 	if (likely(desc->fault_cnt == global_fault_cnt)) goto done;
 	desc->fault_cnt = global_fault_cnt;
 
+	from_state = desc->state;
+	to_state   = desc->next_state;
+
 	// State machine transition under the fault
-	state = desc->state;
-
-	//((ptr_trelease)state_fn[1])(treadlse params);  // example of using fptr
-	IDL_state_list;
-
 	block_cli_if_recover(id);
-	block_cli_if_recover_subtree(id);
+
+	IDL_state_transition;
 
 done:	
 	return desc;
@@ -454,8 +464,16 @@ static inline void call_desc_rec_state(struct desc_track *desc) {}
 
 // client func decl end
 
-// client cstub start
+/* the template for state transition  */
+// client state transition start
+if ((from_state == IDL_current_state) && (to_state == IDL_next_state)) {
+	IDL_state_transition_call
+	goto done;
+}      
+// client state transition end
 
+
+// client cstub start
 CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	struct desc_track *desc = NULL;
 redo:
@@ -476,5 +494,5 @@ typedef int (*ptr_IDL_fname)(IDL_parsdecl);
 // client state_fptr_typedef end
 
 // client state_fptr start
-(ptr_IDL_fname)(IDL_params);
+(ptr_IDL_fname)(IDL_desc_saved_params);
 // client state_fptr end

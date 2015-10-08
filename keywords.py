@@ -13,6 +13,7 @@
 
 from pprint import pprint
 import subprocess
+from igraph import *
 
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
@@ -191,7 +192,7 @@ def read_from_template_code(IFcode):
           '\<client track end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
-    IFcode["trackds"] = code
+    IFcode["trackds"] = {"code" : code}
     
     cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
           '\<client func decl end\>/b;p;ba} \" code_template.c'
@@ -216,30 +217,12 @@ def read_from_template_code(IFcode):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["state_fptr_typedef"] = code
-
-
-#===========================================================================
-#     
-# desc_close_itself      = "itself"              # C0
-# desc_close_subtree     = "subtree"             # C1
-# 
-# desc_create_single     = "nodep"               # P0
-# desc_create_same       = "same"                # P1
-# desc_create_diff       = "different"           # P2
-# 
-# desc_close_remove      = "remove"              # Y0
-# desc_close_keep        = "keep"                # Y1
-# 
-# desc_global            = "global"              # G
-# desc_local             = "local"               # 
-# desc_has_data          = "desc_has_data"       # D_ir
-# resc_has_data          = "resc_has_data"       # D_r
-# desc_has_no_data       = "desc_has_no_data"    # 
-# resc_has_no_data       = "resc_has_no_data"    #
-# func_create            = "create"              
-# func_mutate            = "mutate"
-# func_terminate         = "terminate"   
-#===========================================================================
+    
+    cmd = 'sed -nr \"/\<client state transition start\>/{:a;n;/'\
+          '\<client state transition end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["state_transition"] = code    
 
 # pycparser related
 typedecl                    = "TypeDecl"
@@ -262,10 +245,9 @@ class IDLTuple(object):
         self.info = {} 
         self.sm_info = {} 
         self.desc_data_fields = []
-         
-        init_tuple_keyword(self)
-        init_tuple_info(self)        
-        self.functions = []
+        self.functions = []         
+        #init_tuple_keyword(self)
+        #init_tuple_info(self)        
         
     def add_function(self):
         self.functions.append(IDLFunction())
@@ -290,19 +272,6 @@ def init_function_keyword(node):
     node.desc_data_add           = "desc_data_add" #--> in the form of (target_to_add, value, type)
     node.resc_data_add           = "resc_data"     #--> in the form of (desc_id, value, type)
 
-
-def init_tuple_keyword(node):
-    node.desc_close              = "desc_close"
-    node.desc_dep_create         = "desc_dep_create"
-    node.desc_dep_close          = "desc_dep_close"
-    node.desc_global             = "desc_global"
-    node.desc_block              = "desc_block" #--> in the form of (desc_block, T/F, [component])
-    node.desc_has_data           = "desc_has_data"
-    node.resc_has_data           = "resc_has_data"    
-    node.sm_create               = "creation"
-    node.sm_mutate               = "transition"
-    node.sm_terminate            = "terminal"
-  
 def init_func_info(func):
     func.info[func.name]                = []
     func.info[func.type]                = []
@@ -314,15 +283,73 @@ def init_func_info(func):
     func.info[func.desc_data_add]       = []
     func.info[func.resc_data_add]       = []
 
-def init_tuple_info(tup):
-    tup.info[tup.desc_close]            = []
-    tup.info[tup.desc_dep_create]       = []
-    tup.info[tup.desc_dep_close]        = []
-    tup.info[tup.desc_global]           = []
-    tup.info[tup.desc_block]            = []
-    tup.info[tup.desc_has_data]         = []
-    tup.info[tup.resc_has_data]         = []
+#===============================================================================
+# def init_tuple_keyword(node):
+#     node.desc_close              = "desc_close"
+#     node.desc_dep_create         = "desc_dep_create"
+#     node.desc_dep_close          = "desc_dep_close"
+#     node.desc_global             = "desc_global"
+#     node.desc_block              = "desc_block" #--> in the form of (desc_block, T/F, [component])
+#     node.desc_has_data           = "desc_has_data"
+#     node.resc_has_data           = "resc_has_data"    
+#     node.sm_create               = "creation"
+#     node.sm_mutate               = "transition"
+#     node.sm_terminate            = "terminal"
+#===============================================================================
+
+#===============================================================================
+# def init_tuple_info(tup):
+#     tup.info[tup.desc_close]            = []
+#     tup.info[tup.desc_dep_create]       = []
+#     tup.info[tup.desc_dep_close]        = []
+#     tup.info[tup.desc_global]           = []
+#     tup.info[tup.desc_block]            = []
+#     tup.info[tup.desc_has_data]         = []
+#     tup.info[tup.resc_has_data]         = []
+#===============================================================================
     
+ 
+ # draw the SM transtion with the faulty path
+def  draw_sm_transition(smg):
+    #layout = smg.layout_circle()    
+    #for node in xrange(smg.vcount()):
+    #    print(smg.vs[node]["name"])
+    layout = [(10,0), (0,10), (20,10), (10,20), (0,0), (20,20)]
+    visual_style = {}
+    visual_style["vertex_name"] = smg.vs["name"]
+    visual_style["vertex_label_size"] = 20
+    visual_style["vertex_size"] = 40
+    visual_style["vertex_color"] ="gray"#[color_dict[x] for x in smg.vs["name"]]
+    visual_style["vertex_label"] = smg.vs["name"]
+    visual_style["layout"] = layout
+    visual_style["bbox"] = (500, 500)
+    visual_style["margin"] = 80    
+    widths = [3] * len(smg.es)
+    colors = ["black"]*len(smg.es)   
+    for e in smg.es:
+        if (e.attributes()["retcode"] == "faulty" and e.attributes()["func"]):
+            #widths[e.index] = 2
+            colors[e.index] = "red"
+        elif (e.attributes()["retcode"] == "faulty" and e.attributes()["func"] == ""):
+            colors[e.index] = "orange"
+    # Update the graph with the color and width for the fault path
+    smg.es['width'] = widths
+    smg.es['color'] = colors 
+    
+    #plot(smg, "SM.svg", **visual_style)
+    plot(smg, **visual_style)
+    
+    #===========================================================================
+    # # test for duplicated graph
+    # parent_smg = smg.copy()
+    # tmp_x = [x[0]+200 for x in layout]
+    # tmp_y = [x[1]+100 for x in layout]    
+    # parent_layout = zip(tmp_x, tmp_y)
+    # total_layout = layout + parent_layout
+    # visual_style["layout"] = total_layout
+    # testg = smg + parent_smg
+    # plot(testg, **visual_style)
+    #===========================================================================
   
 # these are just some util functions  
 DEBUG = 0

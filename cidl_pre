@@ -20,14 +20,16 @@ enum {
  terminal
 };
 
-typedef int desc_close;
-typedef int desc_dep_create;
-typedef int desc_dep_close;
-typedef int desc_global;
-typedef int desc_block;
-typedef int desc_has_data;
-typedef int resc_has_data;
-
+struct global_info {
+  int desc_close;
+  int desc_dep_create;
+  int desc_dep_close;
+  int desc_global;
+  int desc_block;
+  int desc_has_data;
+  int resc_has_data;
+};
+# 34 "cidl_gen.h"
 typedef int tsplit_sm;
 typedef int trelease_sm;
 typedef int treadp_sm;
@@ -46,14 +48,14 @@ typedef unsigned long long ull_t;
 struct usr_inv_cap {int a;};
 # 5 "cidl.h" 2
 
-struct global_info {
- desc_close itself;
- desc_dep_create same;
- desc_dep_close keep;
- desc_global false;
- desc_block true;
- desc_has_data true;
- resc_has_data true;
+struct global_info sgi = {
+        .desc_close = itself,
+        .desc_dep_create = same,
+        .desc_dep_close = keep,
+        .desc_global = false,
+        .desc_block = true,
+        .desc_has_data = true,
+        .resc_has_data = true,
 };
 
 void SM_creation_SM_tsplit;

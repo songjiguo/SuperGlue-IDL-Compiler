@@ -12,24 +12,6 @@
 # Output: interface recovery code in C 
 #==============================================================================
 
-# Rules For Constructing Variable Name
-#
-#  Characters Allowed :
-#     Underscore(_)
-#     Capital Letters (A-Z)
-#     Small Letters (a-z)
-#     Digits (0-9)
-#
-#  Blanks & Commas are not allowed
-#  No Special Symbols other than underscore(_) are allowed
-#  First Character should be alphabet or Underscore
-#  Variable name Should not be Reserved Word
-
-# We define the following delimiter:
-#  SCD -- Start of C3 Delimiter
-#  ECD -- End of C3 Delimiter
-#  CD --  C3 Delimiter
-
 from __future__ import print_function
 import sys, os, re 
 #from pprint import pprint
@@ -39,8 +21,6 @@ sys.path.extend(['.', '..'])
 
 import c3_gen, keywords
 from pprint import pprint
-
-#get_desc_track_struct(result, node);
 
 idl_parse_func_result = []  # global string to save parsed func info
 idl_parse_tuple_result = []  # global string to save parsed tuple info
@@ -95,12 +75,15 @@ def parse_decl_info(node):
     else:
         ret = parse_idl_str('SM', node.name)
       
-    if (ret[0] == "creation" or ret[0] == "terminal"):
-        result.tuple[-1].sm_info[ret[0]] = ret[1]
+    if (ret[0] == "creation"):
+        result.tuple[-1].sm_info[ret[0]] = [("null", ret[1])]
+    elif (ret[0] == "terminal"):
+        #result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
+        return
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
-      
+    
 #===============================================================================
 # # Struct: [name, decls**]
 # # struct is node.decls  --> decl list (node is Struct)
@@ -114,37 +97,35 @@ def parse_decl_info(node):
 # # IdentifierType: [names]
 # # field.type.tpye is IdentifierType  
 #
+# # InitList: [exprs**]
+#
+# A named initializer for C99.
+# The name of a NamedInitializer is a sequence of Nodes, because
+# names can be hierarchical and contain constant expressions.
+#
+# NamedInitializer: [name**, expr*]
+# ID: [name]
+#
 #  This is used to construct global information (e.g., tuple in the paper)
 #===============================================================================
 class StructVisitor(c_ast.NodeVisitor):
     def visit_Struct(self, node):
         #global result
         #result.add_tuple()
-        ret = parse_structure_info(node)
+        parse_structure_info(node)
         
+class DeclVisitor_sgi(c_ast.NodeVisitor):
+    def visit_Decl(self, node):
+        parse_structure_info(node)
+
 def parse_structure_info(node):
-    struct  = node.decls
-    #print (node.name)
-    for field in struct:
-        tmp = get_class_name(field.type)
-        if (tmp == keywords.ptrdecl):
-            key = "".join(field.type.type.type.names) + " *"
-        elif (tmp == keywords.typedecl):
-            key = "".join(field.type.type.names)
-        elif (tmp == keywords.funcdecl):
-            print ("keywords is function decl")
-        val = field.name
-        if (node.name == "global_info"):
+    if (node.name == "sgi"):
+        for item in node.init.exprs:   # InitList
+            val = item.expr.name
+            key = item.name[0].name
             result.tuple[-1].info[key] = val
-            result.gvars[node.name] = result.tuple[-1].info
-        elif (node.name == "func_sm"):
-            result.tuple[-1].sm_info[key] = val
-            result.gvars[node.name] = result.tuple[-1].sm_info
-        elif (node.name == "desc_data"):
-            result.tuple[-1].desc_data_fields.append([key,val])
-            result.gvars[node.name] = result.tuple[-1].desc_data_fields
-    #pprint(result.gvars)
-    
+            result.gvars[node.type.type.name] = result.tuple[-1].info            
+
 #===============================================================================
 # # FuncDecl: [args*, type*]
 # # node is FuncDecl
@@ -203,14 +184,14 @@ def parse_func(node):
     fun_info[fun.name] = node.type.declname # set the function name
     for k, v in result.tuple[-1].sm_info.iteritems():
         #print(k)
-        #print(v)
+        #print(''.join([x for t in v for x in t if x != "none"]))# this is the list comprehensive
         #print(node.type.declname)
         #print()
-        if (node.type.declname == v): 
+        if (node.type.declname == ''.join([x for t in v for x in t if x != "null"])): 
             fun_info[fun.sm_state]  = k
     if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
         fun_info[fun.sm_state]  = "transition"
-
+        
     #### parameters of a function #####
     for param_decl in node.args.params:
         func_params = parse_parameters(param_decl)
@@ -223,7 +204,6 @@ def parse_func(node):
            
         #print (func_params)
         construct_desc_fields(func_params)   # construct desc tracking fields    
-        
         # for normal parameters
         fun.normal_para.append((func_params[-3], func_params[-2]))
            
@@ -289,25 +269,16 @@ def parse_func_decl(ast):
     result.gvars["desc_data"] = result.tuple[-1].desc_data_fields
     
 def parse_global_info(ast):
-    v = StructVisitor()
-    v.visit(ast)
+    #v = StructVisitor()
+    #v.visit(ast)
+    v = DeclVisitor_sgi()
+    v.visit(ast)     
     
 def parse_state_machine(ast):
     global transition_list
     transition_list = []
     v = DeclVisitor()
     v.visit(ast) 
-    #pprint (result.tuple[0].sm_info)
-    #pprint(result.tuple[-1].sm_info['creation'])
-    #pprint(result.tuple[-1].sm_info['terminal'])
-    #pprint(result.tuple[-1].sm_info['transition'])
-   
-
-#===============================================================================
-# def parse_global_vars(ast):
-#     v = GlobalVarsVisitor()
-#     v.visit(ast)
-#===============================================================================
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
@@ -329,28 +300,30 @@ if __name__ == "__main__":
     result = keywords.IDLServices()
     
     parse_global_info(ast)
+    
     parse_state_machine(ast)
     #pprint (result.tuple[0].sm_info)
     #print()    
     parse_func_decl(ast)
     #pprint(result.gvars)
-#===============================================================================
-#     # pprint (result.tuple[0].info)
-#     # pprint (result.tuple[0].sm_info)
-#     # pprint (result.tuple[0].desc_data_fields)
-#     pprint (result.gvars)
-# 
-#     print("")
-#     pprint (result.tuple[0].functions[0].info)
-#     print("")
-#     pprint (result.tuple[0].functions[1].info)
-#     print("")
-#    pprint (result.tuple[0].functions[2].info)
-#     print("")
-#     pprint (result.tuple[0].functions[3].info)
-#     print("")
-#    exit()
-#===============================================================================
+    
+    #pprint (result.tuple[0].info)
+    # pprint (result.tuple[0].sm_info)
+    # pprint (result.tuple[0].desc_data_fields)
+    #pprint (result.gvars)
+ 
+    #===========================================================================
+    # print("")
+    # pprint (result.tuple[0].functions[0].info)
+    # print("")
+    # pprint (result.tuple[0].functions[1].info)
+    # print("")
+    # pprint (result.tuple[0].functions[2].info)
+    # print("")
+    # pprint (result.tuple[0].functions[3].info)
+    # print("")
+    #===========================================================================
+    #exit()
   
     c3_gen.idl_generate(result, ast)
     
