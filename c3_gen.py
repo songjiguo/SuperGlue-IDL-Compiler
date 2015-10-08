@@ -11,9 +11,10 @@ from __future__ import print_function
 from pycparser import parse_file, preprocess_file
 from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
 from pprint import pprint
-
 import keywords, sys, os
 from igraph import *
+
+plot_graph = 0
 
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int server_id"
@@ -70,15 +71,10 @@ class BlockCode(object):
 #  fdescp is in the form of [function name, normalPara, sm_state, idlRet, idlPara]
 #===============================================================================   
 def condition_eval(block, (gdescp, fdescp)):
-    #print ("\n <<<<<<< eval starts! >>>>>>>>")
     IFCode = ""
     IFBlkName = ""
     
     list_descp = list(traverse(gdescp)) + list(traverse(fdescp))
-    #print ("list descp ->") 
-    #print (list_descp)
-    #print ("<- list descp") 
-    
     find_any = False
     
     for blk in block.list:
@@ -86,26 +82,14 @@ def condition_eval(block, (gdescp, fdescp)):
         __list_blks = list(traverse(blk[0]))
         for item in __list_blks:
             list_blks.append(item) 
-        #print ("\na ist of blks: sz --> ", len(list_blks))
-        
-            #print (blk[0])
-            #print (blk[0])
-            #print (list_blks)
-        
         match = 0;
         for pred in list_blks:
             pred = pred.split('|')
-            #print ("a pred: --> ")
-            #print (pred)
-            #print (list_descp)
             for desc in list_descp:
                 if (desc in pred):
-                    #print ("found one")
-                    #print (desc)
                     match = match + 1;
 
         if (match == len(list_blks)):
-            #print ("found a match")
             IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
             IFBlkName = blk[2]  
             find_any = True
@@ -116,7 +100,6 @@ def condition_eval(block, (gdescp, fdescp)):
             if (blk[0][0] == "no match"):
                 return (blk[0][0], blk[1])
     return (IFBlkName, IFCode)
-    #print ("<<<<<<< eval ends! >>>>>>>>\n")
         
 def traverse(o, tree_types=(list, tuple)):
     if isinstance(o, tree_types):
@@ -133,10 +116,6 @@ def replace_params(result, fdesc, code, IFcode, subIFcode):
     name    = fdesc[0]
     params  = fdesc[1]  # fdesc[1] is the list of normal parameters
     
-    #pprint (result.tuple[0].functions[0].info)
-    #print (name)
-    #print(fdesc[2])
-    
     parent_id = ""
     id = ""
     tmp_list = list(traverse(fdesc[4]))
@@ -145,16 +124,13 @@ def replace_params(result, fdesc, code, IFcode, subIFcode):
             id = tmp_list[tmp_list.index(item)+2]
         if (item == "parent_desc"):
             parent_id = tmp_list[tmp_list.index(item)+2]
-    #print (name)
-    #print (id)
-    #print (parent_id)
     
     param_list = []
     paramdecl_list = []
     for para in params:               
         param_list.append(para[1])      # para[0] is the type, para[1] is the value
         paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
-    #print (', '.join(paramdecl_list))
+
     code = code.replace("IDL_params", ', '.join(param_list))
     code = code.replace("IDL_pars_len", str(len(param_list)))
     code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
@@ -168,8 +144,6 @@ def replace_params(result, fdesc, code, IFcode, subIFcode):
     for tup in result.tuple:
         for func in tup.functions:
             if (fdesc[0] == func.info["funcname"]):
-                #print(func.info["funcname"])
-                #print(func.info["functype"])
                 code = code.replace("IDL_fntype", func.info["functype"])
     
     if (id):
@@ -253,8 +227,6 @@ def generate_gblocks(globalblocks, IFDesc, IFcode):
     
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     no_match_code_list = []
- 
-#    read_from_code_template(IFcode)
     
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
@@ -266,16 +238,10 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
         subIFcode["paramteres"]["params"] = ', '.join(param_list)
         subIFcode["paramteres"]["params_decl"] = ', '.join(paramdecl_list)  
-        #tmp_list = []
-        
-        
-        #exit()
+
         for i in xrange(len(param_list)):
-            # here we need remove something like "int *_retval_sz" from the desc->params 
-            #if ("*" in paramdecl_list[i] and "retval" in paramdecl_list[i]):
             if (param_list[i] in IFcode["trackds"]["fileds"]):
                 param_list[i] = "desc->"+ param_list[i]
-        #param_list = [x for x in param_list if x not in tmp_list]
         subIFcode["paramteres"]["desc_params"] = ', '.join(param_list)
         
         for fblk in funcblocks:
@@ -300,12 +266,6 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
         code = IFcode["state_fptr"]
         subIFcode["state"]["state_fn"] = replace_params(result, fdesc, code, IFcode, subIFcode)
         
-        #print(subIFcode["state"]["state_fn"])
-        #code = subIFcode["state"]["state_fn"]
-        #code = code.replace("IDL_desc_saved_params", subIFcode["paramteres"]["desc_params"])
-        #subIFcode["state"]["state_fn"] = code
-        #print(subIFcode["state"]["state_fn"])
-        
         # NOTE: sometimes we need replace some function specific information in those global blocks 
         if (fdesc[2] == "creation"):
             # initial creation -- starting point in SM transition             
@@ -327,44 +287,31 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             
         IFcode[fdesc[0]] = subIFcode
    
-    #pprint(IFcode)
-    #exit()
-
     # this is the non-match list and should be empty static inline function
-    #IFcode["internalfn"] = IFcode["internalfn"] + "\n//group: empty block function implementation"    
-    #IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
+    IFcode["internalfn"] = IFcode["internalfn"] + "\n//group: empty block function implementation"    
+    IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
-        #pprint (tup.sm_info)
-        #pprint (tup.info)
-        #pprint (tup.desc_data_fields)
-        
         for key, value in tup.info.iteritems():
             globaldescp.append(key+"_"+value)
             
         for func in tup.functions:
-            #print (func.normal_para)  
-            #pprint(func.info["funcname"])
             normalPara = func.normal_para          
-            #pprint (func.info)
             idlRet  = []
             idlPara = []
             for key, value in func.info.iteritems():
                 if (key == func.name or key == func.sm_state): # skip function name and state (only IDL stuff) 
                     continue
                 elif (value and key is not func.desc_data_retval):
-                    #print(func.desc_data_retval)
                     idlPara.append((key, value))
                 else:
                     (value and key is func.desc_data_retval)
                     idlRet.append((key, value))
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara)
-            #pprint (perFunc)
             funcdescps.append(perFunc) 
-        #exit()
 
 #  init blocks of (predicate, code) 
 def init_blocks(globalblocks, funcblocks):
@@ -405,21 +352,11 @@ def update_current_state(result, state_list, IFcode):
                     IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
  
 def construct_sm_graph(from_list, to_list, state_list, IFcode):
-    #===========================================================================
-    # print(from_list)
-    # print(to_list)
-    # print(state_list)
-    #===========================================================================
-    
     smg = Graph(directed=True)
     smg.add_vertices(state_list)
     smg.add_edges(zip(from_list,to_list))
         
     for e in smg.es:
-        #print(e.attributes())
-        #print(smg.vs[e.source].attributes())
-        #print(smg.vs[e.target].attributes())
-        #e["func"] = "(generic_fp)" + smg.vs[e.target]["name"].replace("state_","")
         fn = smg.vs[e.target]["name"].replace("state_","")
         e["func"] = IFcode[fn]["state"]["state_fn"]
 
@@ -427,10 +364,7 @@ def construct_sm_graph(from_list, to_list, state_list, IFcode):
             e["retcode"] = "again"
         else:
             e["retcode"] = "ok"
-    # add these faulty path
-    #state_list.remove("state_null")
     
-    #pprint(IFcode)
     for item in state_list:
         if (item == "state_null"):
             continue
@@ -446,24 +380,19 @@ def generate_sm_transition(result, funcblocks, IFcode):
     for tup in result.tuple:
         # here we fix the start and end to be 1st and 2nd in the list
         for func in tup.functions:
-            #print(func.info[func.sm_state])
             if (func.info[func.sm_state] == "creation"):
                 fn_list.insert(0, func.info[func.name])
                 state_list.insert(0, "state_"+func.info[func.name])
-                #print(state_list)
             elif (func.info[func.sm_state] == "terminal"):
                 fn_list.insert(1, func.info[func.name])
                 state_list.insert(1, "state_"+func.info[func.name])
-                #print(state_list)
             else:
                 fn_list.append(func.info[func.name])
                 state_list.append("state_"+func.info[func.name])
-                #print(state_list)
         state_list.append("state_null")
 
         for k, v in tup.sm_info.items():
             for item in v:
-                #print(item)
                 from_list.append("state_" + item[0])
                 to_list.append("state_" + item[1])
                 
@@ -494,13 +423,16 @@ def generate_sm_transition(result, funcblocks, IFcode):
     IFcode["sm"] = code 
     
     # update the SM state and transition function for recovery
-    update_current_state(result, state_list, IFcode)
-    
+    update_current_state(result, state_list, IFcode)    
     smg = construct_sm_graph(from_list, to_list, state_list, IFcode)
 
     # this is the key to the c3 recovery
     recover_sm_transition(state_list, smg, IFcode)
     
+    # plot the state transition
+    if (plot_graph):      
+        keywords.draw_sm_transition(smg)
+
     return smg
     
 # ***********!!!!!!!!*************
@@ -515,31 +447,18 @@ def generate_sm_transition(result, funcblocks, IFcode):
 # Note: the recover path must be able to reach to the target state. Therefore, smg should be able to support 
 #       reachability check (i.e., among all possible paths, select the shortest path)
 def recover_sm_transition(state_list, smg, IFcode):
-    #pprint(IFcode["state_fptr"])
-    #print("find recovery transition path....\n")
-    
-    #print(smg)
-    #print(state_list)
-
     rec_path = {}
     tmp = ""
     transition_code = IFcode["state_transition"]    
     creation_v = smg.vs.find(name = state_list[0])   # creation node
     for edge in smg.es:
-        #print(smg.vs(edge.source)["name"])
-        #print(smg.vs(edge.target)["name"])
-        #print(edge["retcode"])
-        #print(edge["func"])  
         tmp_dict = {}      
-        #print(edge["func"])
         if (edge["retcode"] == "faulty" or  
             smg.vs(edge.source)["name"][0] == "state_null"):
             continue
         else:
             before = smg.vs(edge.source)["name"][0]
             after  = smg.vs(edge.target)["name"][0] 
-            #print("from " + before)
-            #print("to " + after)        
             
             # NOTE: this should be taken care by the BLOCK_CLI_IF_RECOVER
             # ********************************************************************
@@ -557,8 +476,6 @@ def recover_sm_transition(state_list, smg, IFcode):
             # ********************************************************************
             back_edges = smg.get_shortest_paths(creation_v.index, edge.target, 
                                                 mode = 'OUTPUT', output="epath")
-            #print(back_edges)
-            
             # does not include the last function call (will be done by "redo")
             back_edges.pop()
             for _eidx in back_edges:
@@ -576,7 +493,6 @@ def recover_sm_transition(state_list, smg, IFcode):
         _tmp = transition_code.replace("IDL_current_state", before)
         _tmp = _tmp.replace("IDL_next_state", after)
         s = ""
-        #s = rec_path[(before, after)]["rec_init"][0][0] 
         # then add each function along the rec_path
         if ("rec_steps" in tmp_dict): 
             for item in tmp_dict["rec_steps"]:
@@ -584,20 +500,10 @@ def recover_sm_transition(state_list, smg, IFcode):
         _tmp = _tmp.replace("IDL_state_transition_call", s)
         tmp = tmp + _tmp
     
-    #pprint(rec_path)
-    #print(IFcode["global"]["BLOCK_CLI_IF_RECOVER"])
-    #exit()
-
     code = IFcode["internalfn"]
     code = code.replace("IDL_state_transition;", tmp)
     IFcode["internalfn"] = code
     
-    #print(code)
-    
-    #print("\nfind recovery transition path....done")
-    #pprint(IFcode)
-    #exit()
-
 #===============================================================================
 #
 #  INPUT AND OUTPUT OF CODE GENERATING
@@ -650,10 +556,6 @@ int main()
 """
     result_code = result_code + "\n" + fake_main
     
-    #pprint(IFresult)
-    #print(result_code)
-    #exit()
-    
     # write out the result to the file (easier debug)
     output_file = "output.c"
     with open(output_file, "w") as text_file:
@@ -696,15 +598,9 @@ def idl_generate(result, parsed_ast):
     generate_gblocks(globalblocks, IFDesc, IFcode)
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
     
-    # post process
-    #post_process(result, IFcode, IFDesc)
-    
     # add SM transition code
-    smg = generate_sm_transition(result, funcblocks, IFcode)
-   
-    # plot the state transition (Andy)      
-    #keywords.draw_sm_transition(smg)
-    
+    generate_sm_transition(result, funcblocks, IFcode)
+
     #pprint (IFcode)
     #exit()
 
