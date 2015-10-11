@@ -186,22 +186,25 @@ def generate_globalvas(result, IFcode):
 
 def generate_gblocks(globalblocks, IFDesc, IFcode):
     # the global blocks
-    IFcode["internalfn_decl"] = ""    
+    IFcode["internalfn_decl"] = ""
+    IFcode["extern"] = ""     
     if (globalblocks):
         __IFcode = {}
         for gblk in globalblocks:
             #print (gblk.list)
             name, code= condition_eval(gblk, (IFDesc[0], None))
             if (name and code):    # there should be any params, otherwise it should be function
-                __IFcode[name] = code
                 # now write out static function skeleton
-                #print (code.split('\n', 1)[0])                
-                IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + code.split('\n', 1)[0][:-2]+";" + "\n"
+                if ("extern" in code):
+                    IFcode["extern"] = IFcode["extern"] + code
+                else:    
+                    __IFcode[name] = code   
+                    IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + \
+                                                code.split('\n', 1)[0][:-2]+";" + "\n"
     IFcode["global"] = __IFcode
-    #pprint(IFcode['global']["BLOCK_CLI_IF_RECOVER_DATA"])  
     
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
-    no_match_code_list = []
+    #no_match_code_list = []
     
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
@@ -228,8 +231,8 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
                                   subIFcode, param_list, paramdecl_list)
             
             if (name == "no match"):   # empty body
-                if (code not in no_match_code_list):
-                    no_match_code_list.append(code)
+                #if (code not in no_match_code_list):
+                #    no_match_code_list.append(code)
                 continue;
             
             if (name and code):
@@ -250,7 +253,9 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #pprint (IFcode)
     # this is the non-match list and should be empty static inline function ?? why need this?
     #print (''.join(no_match_code_list))
-    IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
+    
+    # Kevin QQ
+    #IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
@@ -287,16 +292,17 @@ def init_blocks(globalblocks, funcblocks):
 
     gblk.append(keywords.block_cli_if_recover())
     gblk.append(keywords.block_cli_if_basic_id()) 
-    gblk.append(keywords.block_cli_if_recover_upcall()) 
+    gblk.append(keywords.block_cli_if_recover_upcall())
+    gblk.append(keywords.block_cli_if_recover_upcall_extern())  
+    gblk.append(keywords.block_cli_if_recover_upcall_entry())  
     gblk.append(keywords.block_cli_if_recover_data())
     gblk.append(keywords.block_cli_if_save_data())
-    gblk.append(keywords.block_cli_if_recover_upcall_entry())  
     
     for item in gblk:
         globalblocks.append(item)          
     for item in fblk:
         funcblocks.append(item)
-        
+    
 #===============================================================================
 #
 #   CONSTRUCT STATE MACHINE AND TRANSITION WITH THE FAULT/RECOVERY 
@@ -475,6 +481,7 @@ def paste_idl_code(result, IFcode):
     
     # reorgonize the code section
     IFresult["GLOBAL"]  = {"global_blks":IFcode["global"],    # multiple blocks
+                           "extern_fn":IFcode["extern"],
                            "tracking_ds":IFcode["trackds"]["code"],
                            "internal_fn":IFcode["internalfn"],
                            "internal_fn_decl":IFcode["internalfn_decl"]}
@@ -491,8 +498,13 @@ def paste_idl_code(result, IFcode):
     result_code = result_code + IFresult["GLOBAL"]["tracking_ds"]
     result_code = result_code + "\n"
     result_code = result_code + IFresult["SM"]["state_group"]
+    result_code = result_code + "\n"    
+    result_code = result_code + IFresult["GLOBAL"]["extern_fn"]
+    result_code = result_code + "\n"
     result_code = result_code + IFresult["GLOBAL"]["internal_fn_decl"]
+    result_code = result_code + "\n"
     result_code = result_code + IFresult["GLOBAL"]["internal_fn"]
+    result_code = result_code + "\n"    
     for k, v in IFresult["GLOBAL"]["global_blks"].items():
         result_code = result_code + v
         
@@ -568,7 +580,11 @@ def idl_generate(result, parsed_ast):
     generate_sm_transition(result, funcblocks, IFcode)
 
     #pprint (IFcode)
-    #print(IFcode["trelease"]["blocks"]["BLOCK_CLI_IF_TRACK"])
+    #pprint(IFcode["global"])
+    #print(IFcode["internalfn"])
+    #print(IFcode["internalfn_decl"])
+    #for item in globalblocks:
+    #    item.show()
     #exit()
 
     paste_idl_code(result, IFcode)   # make some further IFprocess here

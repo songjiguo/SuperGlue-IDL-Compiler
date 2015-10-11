@@ -97,6 +97,13 @@ def block_cli_if_recover_upcall_entry():
     printc (BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY.list)
     printc ("")
     return BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY       
+
+def block_cli_if_recover_upcall_extern():
+    BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN, "BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN")
+    printc (BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN.list)
+    printc ("")
+    return BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN       
     
 def block_cli_if_save_data():
     BLOCK_CLI_IF_SAVE_DATA = IDLBlock()    

@@ -107,7 +107,6 @@ creation
 
 // block_cli_if_desc_update 2 start
 static inline void block_cli_if_desc_update_IDL_fname() {
-	
 }
 // block_cli_if_desc_update 2 end
 
@@ -125,6 +124,8 @@ static inline block_cli_if_desc_update_IDL_fname(int id) {
 desc_global_true
 // block_cli_if_recover pred 1 end
 // block_cli_if_recover 1 start
+static inline int call_introspect_creator(int id) {}
+
 static inline void block_cli_if_recover(int id) {
 	spdid_t creater_component;
 	
@@ -221,8 +222,6 @@ static inline void block_cli_if_recover_upcall(int id) {
 // block_cli_if_recover_upcall 1 end
 
 // block_cli_if_recover_upcall no match start
-static inline void block_cli_if_recover_upcall(int id) {
-}
 // block_cli_if_recover_upcall no match end
 
 ///////////////////////////////////////////////
@@ -332,6 +331,7 @@ static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 resc_has_data_true
 // block_cli_if_recover_data pred 1 end
 // block_cli_if_recover_data 1 start
+static inline void call_restore_data(struct desc_track *desc) {}
 static inline void block_cli_if_recover_data(struct desc_track *desc) {
 	assert(desc);
 	call_restore_data(desc);
@@ -351,6 +351,8 @@ static inline void block_cli_if_recover_data(struct desc_track *desc) {
 desc_has_data_true
 // block_cli_if_save_data pred 1 end
 // block_cli_if_save_data 1 start
+static inline void call_save_data(int id, void *data) {}
+
 static inline void block_cli_if_save_data(int id, void *data) {
 	call_save_data(id, data);
 }
@@ -375,9 +377,21 @@ static inline void block_cli_if_recover_upcall_entry(int id) {
 // block_cli_if_recover_upcall_entry 1 end
 
 // block_cli_if_recover_upcall_entry no match start
-static inline void block_cli_if_recover_upcall_entry(int id) {
-}
 // block_cli_if_recover_upcall_entry no match end
+
+///////////////////////////////////////////////
+/********************************************/
+/* client interface call recovery_upcall_extern   */
+/********************************************/
+// block_cli_if_recover_upcall_extern pred 1 start
+desc_global_true|desc_create_diff
+// block_cli_if_recover_upcall_extern pred 1 end
+// block_cli_if_recover_upcall_extern 1 start
+extern void call_recover_upcall(int dest_spd, int id);
+// block_cli_if_recover_upcall_extern 1 end
+
+// block_cli_if_recover_upcall_extern no match start
+// block_cli_if_recover_upcall_extern no match end
 
 
 // client func decl start
@@ -437,11 +451,6 @@ static inline struct desc_track *call_desc_update(int id, int next_state) {
 done:	
 	return desc;
 }
-
-static inline int call_introspect_creator(int id) {}
-static inline void call_recover_upcall(int dest_spd, int id) {}
-static inline void call_restore_data(struct desc_track *desc) {}
-static inline void call_save_data(int id, void *data) {}
 
 // client func decl end
 
