@@ -34,7 +34,6 @@ tsplit(spdid_t desc_data(spdid),
 int
 treadp(spdid_t spdid,
        td_t desc(tid),
-       int len,
        int *ret(cbuf_off),
        int *desc_data_add(offset, ret(sz)));
 

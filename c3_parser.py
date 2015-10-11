@@ -78,8 +78,8 @@ def parse_decl_info(node):
     if (ret[0] == "creation"):
         result.tuple[-1].sm_info[ret[0]] = [("null", ret[1])]
     elif (ret[0] == "terminal"):
-        #result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
-        return
+        result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
+        #print()
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
@@ -160,6 +160,7 @@ def construct_desc_fields(field_str):
     if (desc_str in field_str and pdesc_str in field_str):
         idx = field_str.index(pdesc_str)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
+        result.gvars["parent id"] =  [field_str[idx+1],field_str[idx+2]]
     elif (desc_str in field_str and desc_sizeof in field_str):
         idx = field_str.index(desc_sizeof)
         result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])         
@@ -172,6 +173,7 @@ def construct_desc_fields(field_str):
     elif (desc_retval in field_str):
         idx = field_str.index(desc_retval)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
+        result.gvars["id"] =  [field_str[idx+1],field_str[idx+2]]
            
 def parse_func(node):
     global idl_parse_result 
@@ -181,17 +183,17 @@ def parse_func(node):
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
     #pprint (result.tuple[0].sm_info)
+
     fun_info[fun.name] = node.type.declname # set the function name
     for k, v in result.tuple[-1].sm_info.iteritems():
-        #print(k)
-        #print(''.join([x for t in v for x in t if x != "none"]))# this is the list comprehensive
-        #print(node.type.declname)
-        #print()
-        if (node.type.declname == ''.join([x for t in v for x in t if x != "null"])): 
+        tmp_list = [x for t in v for x in t]
+        if (("null" in tmp_list or "end" in tmp_list) and fun_info[fun.name] in tmp_list):
             fun_info[fun.sm_state]  = k
     if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
         fun_info[fun.sm_state]  = "transition"
-        
+    
+    #pprint(fun_info)
+
     #### parameters of a function #####
     for param_decl in node.args.params:
         func_params = parse_parameters(param_decl)
@@ -308,8 +310,8 @@ if __name__ == "__main__":
     #pprint(result.gvars)
     
     #pprint (result.tuple[0].info)
-    # pprint (result.tuple[0].sm_info)
-    # pprint (result.tuple[0].desc_data_fields)
+    #pprint (result.tuple[0].sm_info)
+    #pprint (result.tuple[0].desc_data_fields)
     #pprint (result.gvars)
  
     #===========================================================================

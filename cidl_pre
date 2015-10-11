@@ -79,7 +79,6 @@ tsplit(spdid_t CD_desc_data_CD_spdid,
 int
 treadp(spdid_t spdid,
        td_t CD_desc_lookup_CD_tid,
-       int len,
        int *_retval_cbuf_off,
        int *desc_data_add(offset, _retval_sz));
 

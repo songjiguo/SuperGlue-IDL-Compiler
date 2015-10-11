@@ -325,8 +325,9 @@ def  draw_sm_transition(smg):
     visual_style["bbox"] = (500, 500)
     visual_style["margin"] = 80    
     widths = [3] * len(smg.es)
-    colors = ["black"]*len(smg.es)   
+    colors = ["black"]*len(smg.es) 
     for e in smg.es:
+        print(e.attributes()["func"])
         if (e.attributes()["retcode"] == "faulty" and e.attributes()["func"]):
             #widths[e.index] = 2
             colors[e.index] = "red"
