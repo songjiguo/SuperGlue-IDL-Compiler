@@ -22,9 +22,6 @@ sys.path.extend(['.', '..'])
 import c3_gen, keywords
 from pprint import pprint
 
-idl_parse_func_result = []  # global string to save parsed func info
-idl_parse_tuple_result = []  # global string to save parsed tuple info
-
 def get_class_name(node):
     return node.__class__.__name__
        
@@ -83,7 +80,7 @@ def parse_decl_info(node):
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
-    
+
 #===============================================================================
 # # Struct: [name, decls**]
 # # struct is node.decls  --> decl list (node is Struct)
@@ -150,17 +147,26 @@ class FuncDeclVisitor(c_ast.NodeVisitor):
         parse_func(node)
         
 # automatically generate the tracking fields        
-def construct_desc_fields(field_str):
+def construct_desc_fields(fname, field_str):
     # construct tracking descriptor struture
     desc_str        = "desc_data"
     pdesc_str       = "parent_desc"
     desc_add_str    = "desc_data_add"
     desc_sizeof     = "size_of"
     desc_retval     = "desc_data_retval"
+    ser_block_str   = "server_block"
+    ser_wakeup_str  = "server_wakeup"
+    #print(field_str)
     if (desc_str in field_str and pdesc_str in field_str):
         idx = field_str.index(pdesc_str)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
         result.gvars["parent id"] =  [field_str[idx+1],field_str[idx+2]]
+    elif (ser_block_str in field_str):
+        idx = field_str.index(ser_block_str)
+        result.tuple[-1].ser_block_track[ser_block_str]  = [fname, field_str[idx+2]]
+    elif (ser_wakeup_str in field_str):
+        idx = field_str.index(ser_wakeup_str)
+        result.tuple[-1].ser_block_track[ser_wakeup_str]  = [fname, field_str[idx+2]]
     elif (desc_str in field_str and desc_sizeof in field_str):
         idx = field_str.index(desc_sizeof)
         result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])         
@@ -174,6 +180,36 @@ def construct_desc_fields(field_str):
         idx = field_str.index(desc_retval)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
         result.gvars["id"] =  [field_str[idx+1],field_str[idx+2]]
+
+# # Decl: [name, quals, storage, funcspec, type*, init*, bitsize*]
+# # node is a Decl
+def parse_parameters(node):
+    func_params = parse_idl_str('CD', node.name)
+    
+    #print(node.name)
+    #print(func_params)
+   
+    if not func_params[0]:
+        func_params[0] = node.name  # normal para         
+        
+    param_str = get_class_name(node.type)
+    if (param_str == keywords.ptrdecl):
+        func_params.append(get_type_name(node)[0]+" *")
+    if (param_str == keywords.typedecl):
+        func_params.append(node.type.type.names[0])
+    if (param_str == keywords.funcdecl):
+        for param_funcdecl in node.type.args.params:
+            func_params.append(param_funcdecl.name)
+        sub_return = get_class_name(node.type.type)
+        if (sub_return == keywords.ptrdecl):
+            ret_tp = node.type.type.type.type.names
+            ret_tp[0] = ret_tp[0]+" *"
+        if (sub_return == keywords.typedecl):    
+            ret_tp = node.type.type.type.names                    
+        func_params.append(ret_tp[0])                
+
+    func_params.append(param_str)  # add pycparser type
+    return func_params
            
 def parse_func(node):
     global idl_parse_result 
@@ -194,10 +230,10 @@ def parse_func(node):
     
     #pprint(fun_info)
 
-    #### parameters of a function #####
+    #### parameters of a function #####   KEVIN ANDY
     for param_decl in node.args.params:
         func_params = parse_parameters(param_decl)
-        #print (func_params)
+        #print (param_decl)
         #print (list(traverse(func_params)))
         # swap the type and value for para (last one is the pycparser type, eg.g, PtrDecl)
         tmp = func_params[-2]
@@ -205,7 +241,7 @@ def parse_func(node):
         func_params[-3] = tmp
            
         #print (func_params)
-        construct_desc_fields(func_params)   # construct desc tracking fields    
+        construct_desc_fields(fun_info[fun.name], func_params)   # construct desc tracking fields    
         # for normal parameters
         fun.normal_para.append((func_params[-3], func_params[-2]))
            
@@ -230,38 +266,11 @@ def parse_func(node):
         #print (func_return[1])
         fun_info[func_return[0]] = func_return[1:]   # add into dict -- key, val
                 
-    construct_desc_fields(func_return)   # construct desc tracking fields
+    construct_desc_fields(fun_info[fun.name], func_return)   # construct desc tracking fields
         
     #print (result.tuple[-1].functions[-1].normal_para)
     #print (result.tuple[-1].functions[-1].info)
 
-# # Decl: [name, quals, storage, funcspec, type*, init*, bitsize*]
-# # node is a Decl
-def parse_parameters(node):
-    func_params = parse_idl_str('CD', node.name)
-    if (not func_params[0]):
-        func_params[0] = node.name  # normal para 
-        
-    param_str = get_class_name(node.type)
-    if (param_str == keywords.ptrdecl):
-        func_params.append(get_type_name(node)[0]+" *")
-    if (param_str == keywords.typedecl):
-        func_params.append(node.type.type.names[0])
-    if (param_str == keywords.funcdecl):
-        for param_funcdecl in node.type.args.params:
-            func_params.append(param_funcdecl.name)
-        sub_return = get_class_name(node.type.type)
-        if (sub_return == keywords.ptrdecl):
-            ret_tp = node.type.type.type.type.names
-            ret_tp[0] = ret_tp[0]+" *"
-        if (sub_return == keywords.typedecl):    
-            ret_tp = node.type.type.type.names                    
-        func_params.append(ret_tp[0])                
-
-    func_params.append(param_str)  # add pycparser type
-    #print(func_params)
-    return func_params
-  
 #===============================================================================
 # # main function - parsing the input information
 #===============================================================================
@@ -281,38 +290,40 @@ def parse_state_machine(ast):
     transition_list = []
     v = DeclVisitor()
     v.visit(ast) 
-
+    
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'cidl.h'
+        filename = 'input/cidl_fs.h'
     
-    os.system("gcc -E cidl.h -o cidl_pre");        
+    keywords.init_service_name(filename)    
+    if ("graph" in sys.argv):
+        keywords.plot_sm_graph()
+    
+    os.system("gcc -E " + filename +" -o cidl_pre");
     #os.system("cat cidl_pre");
     
-    # print_some_space() 
-    # print_logo('<--- AST --->')    
+    # print_some_space()
+    # print_logo('<--- AST --->')
     parser = c_parser.CParser()
     ast = parse_file('cidl_pre', use_cpp=True,
                      cpp_path='cpp',
                      cpp_args=r'-Iutils/fake_libc_include')
     #ast.show()
     
-    result = keywords.IDLServices()
-    
+    result = keywords.IDLServices()    
     parse_global_info(ast)
-    
     parse_state_machine(ast)
-    #pprint (result.tuple[0].sm_info)
-    #print()    
     parse_func_decl(ast)
-    #pprint(result.gvars)
     
-    #pprint (result.tuple[0].info)
-    #pprint (result.tuple[0].sm_info)
-    #pprint (result.tuple[0].desc_data_fields)
-    #pprint (result.gvars)
+    #===========================================================================
+    # pprint (result.tuple[0].info)
+    # pprint (result.tuple[0].sm_info)
+    # pprint (result.tuple[0].ser_block_track)
+    # pprint (result.tuple[0].desc_data_fields)
+    # pprint (result.gvars)
+    #===========================================================================
  
     #===========================================================================
     # print("")

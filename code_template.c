@@ -1,3 +1,7 @@
+/**********************/
+/* client interface   */
+/**********************/
+
 // client track start
 struct IDL_desc_track
 
@@ -8,7 +12,6 @@ CVECT_CREATE_STATIC(rd_vect);
 CSLAB_CREATE(rdservice, sizeof(struct desc_track));
 
 // client track end
-
 
 // client sm start 
 enum state_codes { IDL_state_list };
@@ -43,7 +46,7 @@ creation
 // block_cli_if_invoke pred 2 end
 // block_cli_if_invoke 2 start
 static inline void block_cli_if_invoke_IDL_fname(IDL_parsdecl) {
-	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_desc_saved_params);
+	CSTUB_INVOKE(ret, fault, uc, IDL_pars_len, IDL_params);
 }
 // block_cli_if_invoke 2 end
 
@@ -184,7 +187,7 @@ static inline void block_cli_if_basic_id(int id) {
 // block_cli_if_basic_id 1 end
 
 // block_cli_if_basic_id pred 2 start
-desc_create_single
+desc_dep_create_single
 // block_cli_if_basic_id pred 2 end
 // block_cli_if_basic_id 2 start
 static inline void block_cli_if_basic_id(int id) {
@@ -195,7 +198,7 @@ static inline void block_cli_if_basic_id(int id) {
 	
 	int retval = 0;
 	desc->IDL_server_id = IDL_fname(IDL_desc_saved_params);
-	block_cli_if_recover_data)(desc);
+	block_cli_if_recover_data(desc);
 }
 // block_cli_if_basic_id 2 end
 
@@ -278,7 +281,7 @@ static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 // block_cli_if_track 1 end
 
 // block_cli_if_track pred 2 start
-desc_dep_close_remove
+desc_dep_close_removal
 terminal
 // block_cli_if_track pred 2 end
 // block_cli_if_track 2 start
@@ -308,15 +311,26 @@ static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 // block_cli_if_track 3 end
 
 // block_cli_if_track pred 4 start
-transition
+terminal
 // block_cli_if_track pred 4 end
 // block_cli_if_track 4 start
 static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	assert(desc);
-	desc->state = IDL_curr_state;
+	call_desc_dealloc(desc);
 }
 // block_cli_if_track 4 end
+
+// block_cli_if_track pred 5 start
+transition
+// block_cli_if_track pred 5 end
+// block_cli_if_track 5 start
+static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(IDL_id);
+	assert(desc);
+	desc->state = IDL_curr_state;
+}
+// block_cli_if_track 5 end
 
 // block_cli_if_track_IDL_fname no match start
 static inline void block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
@@ -477,3 +491,76 @@ redo:
         return ret;
 }
 // client cstub end
+
+
+/**********************/
+/* server interface   */
+/**********************/
+// server track start
+struct track_block {
+	int IDL_id;
+	struct track_block *next, *prev;
+};
+struct track_block tracking_block_list[MAX_NUM_SPDS]; 
+
+// server track end
+
+///////////////////////////////////////////////
+/***********************************/
+/* server block_ser_if_block_track */
+/***********************************/
+// block_ser_if_block_track pred 1 start
+server_block
+// block_ser_if_block_track pred 1 end
+// block_ser_if_block_track 1 start
+static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
+	int ret = 0;
+	struct track_block tb;  // track on stack
+	
+	if (unlikely(!tracking_block_list[IDL_from_spd].next)) {
+		INIT_LIST(&tracking_block_list[IDL_from_spd], next, prev);
+	}
+	INIT_LIST(&tb, next, prev);
+	tb.IDL_id = IDL_id;
+	ADD_LIST(&tracking_block_list[IDL_from_spd], &tb, next, prev);
+	ret = IDL_block_fname(IDL_block_params);
+	REM_LIST(&tb, next, prev);
+	
+	return ret;
+}
+// block_ser_if_block_track 1 end
+
+// block_ser_if_block_track no match start
+static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
+}
+// block_ser_if_block_track no match end
+
+///////////////////////////////////////////////
+/***********************************/
+/* server block_ser_if_client_fault_notification */
+/***********************************/
+// block_ser_if_client_fault_notification pred 1 start
+server_wakeup
+// block_ser_if_client_fault_notification pred 1 end
+// block_ser_if_client_fault_notification 1 start
+static inline block_ser_if_client_fault_notification(IDL_from_spd) {
+	struct track_block *tb;	
+	
+	// TAKE LOCK
+
+	for (tb = FIRST_LIST(&tracking_block_list[IDL_from_spd], next, prev);
+	     tb != &tracking_block_list[IDL_from_spd];
+	     tb = FIRST_LIST(tb, next, prev)) {
+		IDL_wakeup_fname(IDL_wakeup_params);
+	}
+
+	// RELEASE LOCK
+
+	return;
+}
+// block_ser_if_client_fault_notification 1 end
+
+// block_ser_if_client_fault_notification no match start
+static inline block_ser_if_client_fault_notification(spdid_t spdid) {
+}
+// block_ser_if_client_fault_notification no match end

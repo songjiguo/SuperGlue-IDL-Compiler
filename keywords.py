@@ -12,9 +12,11 @@
 #==============================================================================
 
 from pprint import pprint
-import subprocess
+import subprocess, re
 from igraph import *
 
+service_name = ""
+plot_graph = 0
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
@@ -30,12 +32,18 @@ class IDLBlock(object):
             print (item[0])     #--- pred
             print (item[1])     #--- code
 
+def init_service_name(s_name):
+    global service_name
+    service_name = s_name
+   
+def plot_sm_graph():
+    global plot_graph
+    plot_graph = 1
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
 
 def build_blk_code(blknode, blkname):
-    
     tmp = blkname.lower()
     blkstr = tmp.replace("_", "\_")
     i = 1
@@ -182,6 +190,21 @@ def block_cli_if_invoke():
     printc ("")
     return BLOCK_CLI_IF_INVOKE
 
+def block_ser_if_block_track():
+    BLOCK_SER_IF_BLOCK_TRACK = IDLBlock()    
+    build_blk_code(BLOCK_SER_IF_BLOCK_TRACK, "BLOCK_SER_IF_BLOCK_TRACK")
+    printc (BLOCK_SER_IF_BLOCK_TRACK.list)
+    printc ("")
+    return BLOCK_SER_IF_BLOCK_TRACK
+
+def block_ser_if_client_fault_notification():
+    BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION = IDLBlock()    
+    build_blk_code(BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION, "BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION")
+    printc (BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION.list)
+    printc ("")
+    return BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION
+
+
 def read_from_template_code(IFcode):
     cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
           '\<client sm end\>/b;p;ba} \" code_template.c'
@@ -229,7 +252,13 @@ def read_from_template_code(IFcode):
           '\<client state transition end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
-    IFcode["state_transition"] = code    
+    IFcode["state_transition"] = code  
+    
+    cmd = 'sed -nr \"/\<server track start\>/{:a;n;/'\
+          '\<server track end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["server"] = {"server_trackds" : {"code" : code}}
 
 # pycparser related
 typedecl                    = "TypeDecl"
@@ -252,7 +281,8 @@ class IDLTuple(object):
         self.info = {} 
         self.sm_info = {} 
         self.desc_data_fields = []
-        self.functions = []         
+        self.functions = []
+        self.ser_block_track = {}         
         #init_tuple_keyword(self)
         #init_tuple_info(self)        
         
@@ -329,12 +359,12 @@ def  draw_sm_transition(smg):
     visual_style["vertex_color"] ="gray"#[color_dict[x] for x in smg.vs["name"]]
     visual_style["vertex_label"] = smg.vs["name"]
     visual_style["layout"] = layout
-    visual_style["bbox"] = (500, 500)
-    visual_style["margin"] = 80    
+    visual_style["bbox"] = (600, 600)
+    visual_style["margin"] = 150    
     widths = [3] * len(smg.es)
     colors = ["black"]*len(smg.es) 
     for e in smg.es:
-        print(e.attributes()["func"])
+        #print(e.attributes()["func"])
         if (e.attributes()["retcode"] == "faulty" and e.attributes()["func"]):
             #widths[e.index] = 2
             colors[e.index] = "red"
@@ -344,8 +374,9 @@ def  draw_sm_transition(smg):
     smg.es['width'] = widths
     smg.es['color'] = colors 
     
-    #plot(smg, "SM.svg", **visual_style)
-    plot(smg, **visual_style)
+    sname = re.findall(r'cidl_(.*?).h',service_name + "_c_stub.c")[0]
+    plot(smg, "output/SM_"+sname+".svg", **visual_style)
+    #plot(smg, **visual_style)
     
     #===========================================================================
     # # test for duplicated graph

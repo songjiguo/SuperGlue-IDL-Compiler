@@ -1,20 +1,28 @@
-# 1 "cidl.h"
+# 1 "input/cidl_lock.h"
 # 1 "<built-in>"
 # 1 "<command-line>"
-# 1 "cidl.h"
+# 1 "input/cidl_lock.h"
 
 
 
-# 1 "cidl_gen.h" 1
+# 1 "input/cidl_gen.h" 1
 
 
 
 enum {
  false,
  true,
+
  itself,
+ subtree,
+
+ single,
+ diff,
  same,
- kepp,
+
+ keep,
+ removal,
+
  creation,
  transition,
  terminal
@@ -29,12 +37,7 @@ struct global_info {
   int desc_has_data;
   int resc_has_data;
 };
-# 34 "cidl_gen.h"
-typedef int tsplit_sm;
-typedef int trelease_sm;
-typedef int treadp_sm;
-typedef int twritep_sm;
-
+# 42 "input/cidl_gen.h"
 typedef int td_t;
 typedef int spdid_t;
 typedef int tor_flags_t;
@@ -46,49 +49,38 @@ typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
 struct usr_inv_cap {int a;};
-# 5 "cidl.h" 2
+# 5 "input/cidl_lock.h" 2
 
 struct global_info sgi = {
         .desc_close = itself,
-        .desc_dep_create = same,
-        .desc_dep_close = keep,
+        .desc_dep_create = single,
+        .desc_dep_close = none,
         .desc_global = false,
         .desc_block = true,
-        .desc_has_data = true,
-        .resc_has_data = true,
+        .desc_has_data = false,
+        .resc_has_data = false,
 };
 
-void SM_creation_SM_tsplit;
-void SM_transition_SM_tsplit_SM_trelease;
-void SM_transition_SM_tsplit_SM_treadp;
-void SM_transition_SM_treadp_SM_treadp;
-void SM_transition_SM_treadp_SM_trelease;
-void SM_transition_SM_tsplit_SM_twritep;
-void SM_transition_SM_twritep_SM_trelease;
-void SM_terminal_SM_trelease;
+void SM_creation_SM_lock_component_alloc;
+void SM_transition_SM_lock_component_alloc_SM_lock_component_free;
+void SM_transition_SM_lock_component_alloc_SM_lock_component_take;
+void SM_transition_SM_lock_component_take_SM_lock_component_release;
+void SM_transition_SM_lock_component_release_SM_lock_component_take;
+void SM_transition_SM_lock_component_release_SM_lock_component_free;
+void SM_terminal_SM_lock_component_free;
 
-typedef td_t CD_desc_data_retval_CD_td_t_CD_tid; CD_desc_data_retval_CD_td_t_CD_tid
-tsplit(spdid_t CD_desc_data_CD_spdid,
-    td_t CD_desc_data_CD_parent_desc_CD_parent_tid,
-    char *CD_desc_data_CD_param,
-    int CD_desc_data_CD_size_of(param, len),
-    tor_flags_t CD_desc_data_CD_tflags,
-    evt_t CD_desc_data_CD_evtid);
-
+typedef ul_t CD_desc_data_retval_CD_ul_t_CD_lock_id; CD_desc_data_retval_CD_ul_t_CD_lock_id
+lock_component_alloc(spdid_t CD_desc_data_CD_spd);
 
 int
-treadp(spdid_t spdid,
-       td_t CD_desc_lookup_CD_tid,
-       int *_retval_cbuf_off,
-       int *desc_data_add(offset, _retval_sz));
-
+lock_component_take(spdid_t spd,
+     ul_t CD_desc_lookup_CD_server_block_CD_lock_id,
+     u32_t thd_id);
 
 int
-twritep(spdid_t spdid,
- td_t CD_desc_lookup_CD_tid,
- int resource_data(tid, cbid),
- int sz);
+lock_component_release(spdid_t spd,
+        ul_t CD_desc_lookup_CD_server_wakeup_CD_lock_id);
 
 int
-trelease(spdid_t spdid,
-  td_t CD_desc_terminate_CD_tid);
+lock_component_free(spdid_t spd,
+     ul_t CD_desc_terminate_CD_lock_id);

@@ -11,10 +11,11 @@ from __future__ import print_function
 from pycparser import parse_file, preprocess_file
 from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
 from pprint import pprint
-import keywords, sys, os
+import keywords, sys, os, re
 from igraph import *
 
-plot_graph = 0
+import c3_parser
+
 using_main = 1
 
 # transparent to the user (used internally, so no need to dynamically change)
@@ -178,22 +179,34 @@ def generate_globalvas(result, IFcode):
     code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
     
     # internal function files
-    code = r'''#include "cidl_gen.h"''' + "\n" + code 
+    #code = r'''#include "cidl_gen.h"''' + "\n" + code 
     
-    IFcode["trackds"]["id"] = result.gvars["id"]
-    IFcode["trackds"]["parent id"] = result.gvars["parent id"]
+    if ("id" in result.gvars):
+        IFcode["trackds"]["desc_id"] = result.gvars["id"]
+    if ("parent id" in result.gvars):
+        IFcode["trackds"]["desc_parent id"] = result.gvars["parent id"]
     IFcode["trackds"]["code"] = code
 
-def generate_gblocks(globalblocks, IFDesc, IFcode):
+def generate_gblocks(result, globalblocks, IFDesc, IFcode):
     # the global blocks
     IFcode["internalfn_decl"] = ""
-    IFcode["extern"] = ""     
+    IFcode["extern"] = "" 
+    no_match_code_list = []
+    
     if (globalblocks):
         __IFcode = {}
         for gblk in globalblocks:
             #print (gblk.list)
             name, code= condition_eval(gblk, (IFDesc[0], None))
+            
+            if (name == "no match"):   # empty body
+                #print(code)
+                if (code not in no_match_code_list):
+                    no_match_code_list.append(code)
+            
             if (name and code):    # there should be any params, otherwise it should be function
+                #print(name)
+                #print(code)
                 # now write out static function skeleton
                 if ("extern" in code):
                     IFcode["extern"] = IFcode["extern"] + code
@@ -202,7 +215,21 @@ def generate_gblocks(globalblocks, IFDesc, IFcode):
                     IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + \
                                                 code.split('\n', 1)[0][:-2]+";" + "\n"
     IFcode["global"] = __IFcode
-    
+    IFcode["global"]["no match"] =  ''.join(no_match_code_list)
+
+def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
+    if (ser_funcblocks):
+        IFcode["server"]["server_code"] = {}
+        for serblk in ser_funcblocks:
+            #print (serblk.list)
+            name, code= condition_eval(serblk, (IFDesc[0], None))
+            if (name and code):    # there should be any params, otherwise it should be function
+                #print(name)
+                #print(code)
+                IFcode["server"]["server_code"][name] = code
+    for k, v in result.tuple[0].ser_block_track.iteritems():
+            IFcode["server"][k] = v    
+
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #no_match_code_list = []
     
@@ -217,7 +244,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
         subIFcode["paramteres"]["params"] = ', '.join(param_list)
         subIFcode["paramteres"]["params_decl"] = ', '.join(paramdecl_list)  
-
+        
         for i in xrange(len(param_list)):
             if (param_list[i] in IFcode["trackds"]["fields"]):
                 paramdesc_list[i] = "desc->"+ param_list[i]
@@ -231,6 +258,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
                                   subIFcode, param_list, paramdecl_list)
             
             if (name == "no match"):   # empty body
+                #print(code)
                 #if (code not in no_match_code_list):
                 #    no_match_code_list.append(code)
                 continue;
@@ -262,9 +290,13 @@ def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
         for key, value in tup.info.iteritems():
             globaldescp.append(key+"_"+value)
+
+        # in order to generate server side block tracking and wake up code
+        for key, value in tup.ser_block_track.iteritems():
+            globaldescp.append(key)
             
         for func in tup.functions:
-            normalPara = func.normal_para          
+            normalPara = func.normal_para
             idlRet  = []
             idlPara = []
             for key, value in func.info.iteritems():
@@ -278,10 +310,10 @@ def generate_description(result, funcdescps, globaldescp):
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara)
             funcdescps.append(perFunc) 
-
+            
 #  init blocks of (predicate, code) 
-def init_blocks(globalblocks, funcblocks):
-    fblk, gblk = ([] for i in range(2))
+def init_blocks(globalblocks, funcblocks, ser_funcblocks):
+    gblk, fblk, ser_fblk = ([] for i in range(3))
     
     fblk.append(keywords.block_cli_if_invoke())
     fblk.append(keywords.block_cli_if_desc_update())
@@ -289,7 +321,7 @@ def init_blocks(globalblocks, funcblocks):
     fblk.append(keywords.block_cli_if_recover_subtree())
     fblk.append(keywords.block_cli_if_track())  
     fblk.append(keywords.block_cli_if_recover_init())
-
+    
     gblk.append(keywords.block_cli_if_recover())
     gblk.append(keywords.block_cli_if_basic_id()) 
     gblk.append(keywords.block_cli_if_recover_upcall())
@@ -297,11 +329,16 @@ def init_blocks(globalblocks, funcblocks):
     gblk.append(keywords.block_cli_if_recover_upcall_entry())  
     gblk.append(keywords.block_cli_if_recover_data())
     gblk.append(keywords.block_cli_if_save_data())
+
+    ser_fblk.append(keywords.block_ser_if_block_track())
+    ser_fblk.append(keywords.block_ser_if_client_fault_notification())
     
     for item in gblk:
         globalblocks.append(item)          
     for item in fblk:
         funcblocks.append(item)
+    for item in ser_fblk:
+        ser_funcblocks.append(item)
     
 #===============================================================================
 #
@@ -396,7 +433,7 @@ def generate_sm_transition(result, funcblocks, IFcode):
     recover_sm_transition(state_list, smg, IFcode)
     
     # plot the state transition
-    if (plot_graph):      
+    if (keywords.plot_graph):      
         keywords.draw_sm_transition(smg)
 
     return smg
@@ -469,13 +506,55 @@ def recover_sm_transition(state_list, smg, IFcode):
     code = IFcode["internalfn"]
     code = code.replace("IDL_state_transition;", tmp)
     IFcode["internalfn"] = code
-    
-#===============================================================================
+
+#=========================
 #
-#  INPUT AND OUTPUT OF CODE GENERATING
+#  CODE GENERATING
 #
-#===============================================================================
-def paste_idl_code(result, IFcode):
+#=========================
+def construct_server_code(result, IFcode):
+    server_code = ""  
+    IFresult = {}
+                
+    IFresult["SERVER"]  = {"tracds" : IFcode["server"]["server_trackds"]["code"]}
+    server_code = "\n" + server_code + IFresult["SERVER"]["tracds"]
+    final_id = IFcode["trackds"]["desc_id"][1]                                     
+    IFresult["SERVER"]["block_func"] = {}
+    IFresult["SERVER"]["wakeup_func"] = {}
+    for k, v in IFcode["server"]["server_code"].items():
+        if ("IDL_block_fname" in v):  # block
+            IFresult["SERVER"]["block_func"]["code"] = v
+            IFresult["SERVER"]["block_func"]["info"] = IFcode["server"]["server_block"]
+            server_code = server_code + IFresult["SERVER"]["block_func"]["code"]
+            server_code = server_code + "\n"
+            server_code = server_code.replace("IDL_block_fname", IFresult["SERVER"]["block_func"]["info"][0])
+            server_code = server_code.replace("IDL_parsdecl", 
+                                      IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["paramteres"]["params_decl"])
+            tmp_par = IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["paramteres"]["params"]
+            from_spd = tmp_par.split(',')[0]
+            server_code = server_code.replace("IDL_from_spd", from_spd)
+            server_code = server_code.replace("IDL_block_params", tmp_par)
+        if ("IDL_wakeup_fname" in v): # wakeup
+            IFresult["SERVER"]["wakeup_func"]["code"] = v
+            IFresult["SERVER"]["wakeup_func"]["info"] = IFcode["server"]["server_wakeup"]
+            server_code = server_code + IFresult["SERVER"]["wakeup_func"]["code"]
+            server_code = server_code + "\n"
+            server_code = server_code.replace("IDL_wakeup_fname", IFresult["SERVER"]["wakeup_func"]["info"][0])
+            
+            # make sure the para in () is consistent with the wakeup function 
+            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["paramteres"]["params_decl"]
+            from_spd = tmp_par.split(',')[0].split(' ')[1]
+            server_code = server_code.replace("IDL_from_spd", from_spd)
+            # make sure we use the tracked id
+            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["paramteres"]["params"]
+            tmp_par = tmp_par.replace(final_id, "tb->"+final_id)
+            server_code = server_code.replace("IDL_wakeup_params", tmp_par) 
+
+    server_code = server_code.replace("IDL_id", final_id)
+
+    return server_code
+
+def construct_client_code(result, IFcode):
     result_code = ""
     tmp, IFresult = ({} for i in range(2))
     
@@ -513,15 +592,22 @@ def paste_idl_code(result, IFcode):
             result_code = result_code + _v
     for k, v in IFresult["FUNCTIONS"].items():
         result_code = result_code + v["cstub_fn"]
-        
+    
     # finally replace IDL_id, IDL_server_id, IDL_parent_id
-    final_id        = IFcode["trackds"]["id"][1]
-    final_parent_id = IFcode["trackds"]["parent id"][1]
+    final_id        = IFcode["trackds"]["desc_id"][1]
     result_code = result_code.replace("IDL_id", final_id)
     result_code = result_code.replace("IDL_server_id", "server_" + final_id)
-    result_code = result_code.replace("IDL_parent_id", final_parent_id)
+    if ("desc_parent id" in IFcode["trackds"]):
+        final_parent_id = IFcode["trackds"]["desc_parent id"][1]
+        result_code = result_code.replace("IDL_parent_id", final_parent_id)
+    
+    return result_code
 
-        
+def write_code_to_file(code, output_file):
+    # write out the result to the file (easier debug)
+
+    #pprint(IFcode)
+    #exit()
     # make a fake main function for testing only        
     if (using_main):
         fake_main = r"""
@@ -531,60 +617,76 @@ int main()
     return 0;
 }
 """
-        result_code = result_code + "\n" + fake_main
+        code = code + "\n" + fake_main
+        
+    code = r'''#include "cidl_gen.h"''' + "\n" + code 
     
-    # write out the result to the file (easier debug)
-    output_file = "output.c"
-    with open(output_file, "w") as text_file:
-        text_file.write("{0}".format(result_code))
-    
-    os.system("indent -linux output.c") 
-    
-    #os.system("cat output.c")        
-    #exit()
-    
+    with open("tmp.c", "w") as text_file:
+        text_file.write("{0}".format(code))
+    os.system("indent -linux tmp.c -o " + output_file)
+    os.system("rm tmp.c")
+
     # generate the new ast for the interface code
     parser = c_parser.CParser()
     ast = parse_file(output_file, use_cpp=True,
                      cpp_path='cpp',
                      cpp_args=r'-Iutils/fake_libc_include')    
     #ast.show()
-    print ("IDL process is done")
+    
+def paste_idl_code(result, IFcode):
+    sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
+    # client side code
+    client_code = construct_client_code(result, IFcode)
+    write_code_to_file(client_code, "output/" + sname + "_c_stub.c")  
+    # server side code
+    server_code = construct_server_code(result, IFcode)
+    write_code_to_file(server_code, "output/" + sname + "_s_cstub.c")
+    
+    print ("IDL process is done!!")
 
 def idl_generate(result, parsed_ast):
-    globaldescp, funcdescps, globalblocks, funcblocks = ([] for i in range(4))
+    globaldescp, funcdescps, globalblocks, funcblocks, ser_funcblocks = ([] for i in range(5))
     IFcode          = {}
     #===========================================================================
-    #pprint (result.tuple[0].info)
-    #pprint (result.tuple[0].sm_info)
-    #pprint (result.tuple[0].desc_data_fields)
-    #pprint (result.gvars)
-    #pprint (result.tuple[0].functions[0].info)
-    #pprint (result.tuple[0].functions[1].info)
-    #pprint (result.tuple[0].functions[2].info)
-    #pprint (result.tuple[0].functions[3].info)
+    # pprint (result.tuple[0].info)
+    # pprint (result.tuple[0].sm_info)
+    # pprint (result.tuple[0].ser_block_track)
+    # pprint (result.tuple[0].desc_data_fields)
+    # pprint (result.gvars)
+    # pprint (result.tuple[0].functions[0].info)
+    # pprint (result.tuple[0].functions[1].info)
+    # pprint (result.tuple[0].functions[2].info)
+    # pprint (result.tuple[0].functions[3].info)
+    # exit()
     #===========================================================================
-    
-    keywords.read_from_template_code(IFcode)    
+    keywords.read_from_template_code(IFcode)
     IFDesc = (globaldescp, funcdescps)
-    # build blocks and descriptions
-    generate_description(result, funcdescps, globaldescp)  
-    init_blocks(globalblocks, funcblocks)
     
+    # build blocks and descriptions
+    generate_description(result, funcdescps, globaldescp) 
+    init_blocks(globalblocks, funcblocks, ser_funcblocks)
+
+    #pprint(IFDesc)
+    #exit()
+
     # evaluate the conditions and generate block code
     generate_globalvas(result, IFcode)
-    generate_gblocks(globalblocks, IFDesc, IFcode)
+    generate_gblocks(result, globalblocks, IFDesc, IFcode)
+    # server side code
+    generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode)
+    # client side code
     generate_fblocks(result, funcblocks, IFDesc, IFcode)
-    
+
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
 
     #pprint (IFcode)
-    #pprint(IFcode["global"])
+    #pprint(IFcode["server_trackds"]["code"])
+    #pprint(IFcode["server_code"])
     #print(IFcode["internalfn"])
     #print(IFcode["internalfn_decl"])
     #for item in globalblocks:
     #    item.show()
     #exit()
-
+    
     paste_idl_code(result, IFcode)   # make some further IFprocess here

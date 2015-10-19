@@ -33,14 +33,14 @@ tsplit(spdid_t desc_data(spdid),
 /* treadp returns cbuf id  */
 int
 treadp(spdid_t spdid,
-       td_t desc(sm_block(tid)),
+       td_t desc(tid),
        int *ret(cbuf_off),
        int *desc_data_add(offset, ret(sz)));
 
 /* twritep returns written bytes */
 int
 twritep(spdid_t spdid,
-	td_t desc(sm_wakeup(tid)),
+	td_t desc(tid),
 	int resource_data(tid, cbid), 
 	int sz);
 
