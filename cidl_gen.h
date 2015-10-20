@@ -40,6 +40,7 @@ struct global_info {
 #define service_global_info struct global_info sgi
 
 typedef int td_t;
+typedef int cbuf_t;
 typedef int spdid_t;
 typedef int tor_flags_t;
 typedef int evt_t;

@@ -190,6 +190,13 @@ def block_cli_if_invoke():
     printc ("")
     return BLOCK_CLI_IF_INVOKE
 
+def block_cli_if_marshalling_invoke():
+    BLOCK_CLI_IF_MARSHALLING_INVOKE = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_MARSHALLING_INVOKE, "BLOCK_CLI_IF_MARSHALLING_INVOKE")
+    printc (BLOCK_CLI_IF_MARSHALLING_INVOKE.list)
+    printc ("")
+    return BLOCK_CLI_IF_MARSHALLING_INVOKE
+
 def block_ser_if_block_track():
     BLOCK_SER_IF_BLOCK_TRACK = IDLBlock()    
     build_blk_code(BLOCK_SER_IF_BLOCK_TRACK, "BLOCK_SER_IF_BLOCK_TRACK")
@@ -235,6 +242,12 @@ def read_from_template_code(IFcode):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["cstub"] = code
+
+    cmd = 'sed -nr \"/\<client cstub marshalling start\>/{:a;n;/'\
+          '\<client cstub marshalling end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["marshalling cstub"] = code
     
     cmd = 'sed -nr \"/\<client state_fptr start\>/{:a;n;/'\
           '\<client state_fptr end\>/b;p;ba} \" code_template.c'
@@ -259,6 +272,12 @@ def read_from_template_code(IFcode):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["server"] = {"server_trackds" : {"code" : code}}
+
+    cmd = 'sed -nr \"/\<marshalling ds start\>/{:a;n;/'\
+          '\<marshalling ds end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["marshalling ds"] = {"code" : code}
 
 # pycparser related
 typedecl                    = "TypeDecl"

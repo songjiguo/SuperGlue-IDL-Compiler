@@ -17,6 +17,7 @@ from igraph import *
 import c3_parser
 
 using_main = 1
+max_params = 4  # up to 4 parameters in Composite
 
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int IDL_server_id"
@@ -123,7 +124,7 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
     code = code.replace("IDL_fname", name)
     
     if (fdesc[2] != "creation"):
-        code = code.replace("IDL_desc_saved_params", subIFcode["paramteres"]["desc_params"])
+        code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
 
     for tup in result.tuple:
         for func in tup.functions:
@@ -132,10 +133,10 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
     
     return code        
 
-# initial creation -- starting point in SM transition             
-def prepare_recreation(fdesc, subIFcode, IFcode):
+# initial creation -- starting point in SM transition, treat this specially            
+def init_creation(fdesc, subIFcode, IFcode):
     code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
-    code = code.replace("IDL_desc_saved_params", subIFcode["paramteres"]["desc_params"])
+    code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
     code = code.replace("IDL_fname", fdesc[0])
     IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code 
     
@@ -146,12 +147,12 @@ def prepare_recreation(fdesc, subIFcode, IFcode):
     # desc_cons
     code = IFcode["internalfn"]
     tmp = ""
-    for f, b in zip(subIFcode["paramteres"]["desc_params"].split(","), 
-                    subIFcode["paramteres"]["params"].split(",")):
+    for f, b in zip(subIFcode["parameters"]["desc_params"].split(","), 
+                    subIFcode["parameters"]["params"].split(",")):
         tmp = tmp + f + "=" + b + ";\n"
-    code = code.replace("IDL_parsdecl", subIFcode["paramteres"]["params_decl"])
+    code = code.replace("IDL_parsdecl", subIFcode["parameters"]["params_decl"])
     code = code.replace("IDL_desc_cons;", tmp)
-    IFcode["internalfn"] = code            
+    IFcode["internalfn"] = code
 
 def generate_globalvas(result, IFcode):
     code = IFcode["trackds"]["code"]
@@ -230,26 +231,87 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
     for k, v in result.tuple[0].ser_block_track.iteritems():
             IFcode["server"][k] = v    
 
+# marshall the parameter list (using cbuf), if 2 conditions are met
+# 1) more than 4 parameters (Composite passes up to 4 parameters)
+# 2) passing pointer, and which is not "__retval" type
+def marshalling(result, fdesc, subIFcode, IFcode):
+    param_list = subIFcode["parameters"]["params"].split(",")
+    paramdecl_list = subIFcode["parameters"]["params_decl"].split(",")
+
+    cond_1 = (len(param_list) > max_params)
+    cond_2 = ("*" in ', '.join(paramdecl_list))
+    if (cond_2):
+        num = len(param_list)
+        for item in paramdecl_list:
+            if ("*" not in item or "_retval" in item):
+                num -= 1
+        cond_2 *= num  # if there is any pointer to pass, and not __retval, set num must be none 0
+        
+    # when either condition is met, we do the marshalling here
+    if (cond_1 and cond_2):
+        #print(param_list)
+        #print(paramdecl_list)
+        tmp = ""
+        for item in param_list:
+            tmp = tmp + "md->"+item.strip()+ " = "+ item.strip() + ";\n"
+        marshalling_cons = tmp[:-2] # remove the last ";"
+        tmp = ""
+        for item in paramdecl_list:
+            tmp = tmp + item + ";\n"
+        marshalling_parsdecl = tmp[:-2] # remove the last ";"
+        len_idx = list(traverse(fdesc)).index("size_of") + 3
+        len_var = list(traverse(fdesc))[len_idx]
+        
+        marshalling_ds   = IFcode["marshalling ds"]["code"]
+        marshalling_ds = marshalling_ds.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
+        
+        marshalling_code = IFcode["marshalling cstub"]        
+        cstub_code = marshalling_code
+        cstub_code = cstub_code.replace("IDL_marshalling_cons", marshalling_cons)                     
+        cstub_code = cstub_code.replace("IDL_from_spd", param_list[0])
+        cstub_code = cstub_code.replace("IDL_data_len", len_var)
+        
+        inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] 
+        inkcode = inkcode.replace("IDL_marshalling_cons", marshalling_cons)                      
+        inkcode = inkcode.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
+        inkcode = inkcode.replace("IDL_from_spd", param_list[0])       
+        subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
+    else:
+        tmp = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"].split('\n', 1)[0][:-2]+";"
+        IFcode["internalfn_decl"] = IFcode["internalfn_decl"].replace(tmp, "") # remove the static declaration
+        subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
+        subIFcode["marshall ds"] = ""
+        cstub_code = IFcode["cstub"]
+        inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
+        marshalling_ds = ""
+
+    subIFcode["cstub_fn"] = replace_params(result, fdesc, cstub_code, IFcode, 
+                                           subIFcode, param_list, paramdecl_list)
+    subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = replace_params(result, fdesc, inkcode, IFcode, 
+                                                 subIFcode, param_list, paramdecl_list)
+    subIFcode["marshall ds"] = replace_params(result, fdesc, marshalling_ds, IFcode, 
+                                                 subIFcode, param_list, paramdecl_list)        
+
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #no_match_code_list = []
     
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
-        subIFcode, subIFcode["paramteres"],subIFcode["blocks"], subIFcode["state"] = ({} for i in range(4)) 
+        subIFcode, subIFcode["parameters"],subIFcode["blocks"], subIFcode["state"] = ({} for i in range(4)) 
         param_list, paramdecl_list, paramdesc_list = ([] for i in range(3))
 
         for para in fdesc[1]:               # fdesc[1] is the list of normal parameters
             param_list.append(para[1])      # para[0] is the type, para[1] is the value
             paramdesc_list.append(para[1])
             paramdecl_list.append(para[0]+" "+para[1])  # this is for the parametes used in the function decl
-        subIFcode["paramteres"]["params"] = ', '.join(param_list)
-        subIFcode["paramteres"]["params_decl"] = ', '.join(paramdecl_list)  
+        subIFcode["parameters"]["params"] = ', '.join(param_list)
+        subIFcode["parameters"]["params_decl"] = ', '.join(paramdecl_list)  
         
         for i in xrange(len(param_list)):
             if (param_list[i] in IFcode["trackds"]["fields"]):
                 paramdesc_list[i] = "desc->"+ param_list[i]
-        subIFcode["paramteres"]["desc_params"] = ', '.join(paramdesc_list)
-        #print(subIFcode["paramteres"]["desc_params"])
+        subIFcode["parameters"]["desc_params"] = ', '.join(paramdesc_list)
+        #print(subIFcode["parameters"]["desc_params"])
         
         for fblk in funcblocks:
             #fblk.show()
@@ -268,21 +330,22 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
                 # now write out static function declarations!!!
                 IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + code.split('\n', 1)[0][:-2]+";" + "\n"
 
-        code = IFcode["cstub"]
-        subIFcode["cstub_fn"] = replace_params(result, fdesc, code, IFcode, 
-                                               subIFcode, param_list, paramdecl_list)
         code = "IDL_fname(IDL_desc_saved_params)" # add this function to the edge later
         subIFcode["state"]["state_fn"] = replace_params(result, fdesc, code, IFcode, 
                                                         subIFcode, param_list, paramdecl_list)
+        
+        marshalling(result, fdesc, subIFcode, IFcode)
+
         if (fdesc[2] == "creation"):
-            prepare_recreation(fdesc, subIFcode, IFcode)
+            init_creation(fdesc, subIFcode, IFcode)
 
         IFcode[fdesc[0]] = subIFcode
-    #pprint (IFcode)
+        #print(IFcode[fdesc[0]])
+    #print (IFcode["tsplit"]["blocks"]["BLOCK_CLI_IF_INVOKE"])
+    #exit()
     # this is the non-match list and should be empty static inline function ?? why need this?
     #print (''.join(no_match_code_list))
     
-    # Kevin QQ
     #IFcode["internalfn"] = IFcode["internalfn"] + '\n' + ''.join(no_match_code_list)
 
 # construct global/function description
@@ -316,6 +379,7 @@ def init_blocks(globalblocks, funcblocks, ser_funcblocks):
     gblk, fblk, ser_fblk = ([] for i in range(3))
     
     fblk.append(keywords.block_cli_if_invoke())
+    fblk.append(keywords.block_cli_if_marshalling_invoke()) # marshalling version
     fblk.append(keywords.block_cli_if_desc_update())
     fblk.append(keywords.block_cli_if_invoke_ser_intro())
     fblk.append(keywords.block_cli_if_recover_subtree())
@@ -529,8 +593,8 @@ def construct_server_code(result, IFcode):
             server_code = server_code + "\n"
             server_code = server_code.replace("IDL_block_fname", IFresult["SERVER"]["block_func"]["info"][0])
             server_code = server_code.replace("IDL_parsdecl", 
-                                      IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["paramteres"]["params_decl"])
-            tmp_par = IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["paramteres"]["params"]
+                                      IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["parameters"]["params_decl"])
+            tmp_par = IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["parameters"]["params"]
             from_spd = tmp_par.split(',')[0]
             server_code = server_code.replace("IDL_from_spd", from_spd)
             server_code = server_code.replace("IDL_block_params", tmp_par)
@@ -542,11 +606,11 @@ def construct_server_code(result, IFcode):
             server_code = server_code.replace("IDL_wakeup_fname", IFresult["SERVER"]["wakeup_func"]["info"][0])
             
             # make sure the para in () is consistent with the wakeup function 
-            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["paramteres"]["params_decl"]
+            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["parameters"]["params_decl"]
             from_spd = tmp_par.split(',')[0].split(' ')[1]
             server_code = server_code.replace("IDL_from_spd", from_spd)
             # make sure we use the tracked id
-            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["paramteres"]["params"]
+            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["parameters"]["params"]
             tmp_par = tmp_par.replace(final_id, "tb->"+final_id)
             server_code = server_code.replace("IDL_wakeup_params", tmp_par) 
 
@@ -571,11 +635,16 @@ def construct_client_code(result, IFcode):
         for func in tup.functions:
             name = func.info["funcname"]
             tmp[name]= IFcode[name]
-    IFresult["FUNCTIONS"] = tmp   
-    
+    IFresult["FUNCTIONS"] = tmp
+ 
     # start pasting the code
     result_code = result_code + IFresult["GLOBAL"]["tracking_ds"]
     result_code = result_code + "\n"
+
+    for k, v in IFresult["FUNCTIONS"].items():
+        result_code = result_code + v["marshall ds"]
+    result_code = result_code + "\n"
+        
     result_code = result_code + IFresult["SM"]["state_group"]
     result_code = result_code + "\n"    
     result_code = result_code + IFresult["GLOBAL"]["extern_fn"]
@@ -680,13 +749,14 @@ def idl_generate(result, parsed_ast):
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
 
-    #pprint (IFcode)
+    #pprint(IFcode)
     #pprint(IFcode["server_trackds"]["code"])
     #pprint(IFcode["server_code"])
     #print(IFcode["internalfn"])
     #print(IFcode["internalfn_decl"])
     #for item in globalblocks:
-    #    item.show()
+    #item.show()
+    
     #exit()
     
     paste_idl_code(result, IFcode)   # make some further IFprocess here

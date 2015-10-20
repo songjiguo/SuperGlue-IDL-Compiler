@@ -21,6 +21,17 @@ static volatile unsigned long global_fault_cnt = 0;
 CVECT_CREATE_STATIC(rd_vect);
 CSLAB_CREATE(rdservice, sizeof(struct desc_track));
 
+// assumption: at most one pointer is passed at a time
+struct __sg_tsplit_marshalling {
+	spdid_t spdid;
+	td_t parent_tid;
+	char *param;
+	int len;
+	tor_flags_t tflags;
+	evt_t evtid;
+	char data[0];
+};
+
 enum state_codes { state_tsplit, state_trelease, state_treadp, state_twritep,
 	    state_null };
 
@@ -31,6 +42,15 @@ static inline void call_save_data(int id, void *data);
 static inline void block_cli_if_invoke_tsplit(spdid_t spdid, td_t parent_tid,
 					      char *param, int len,
 					      tor_flags_t tflags, evt_t evtid);
+static inline void block_cli_if_marshalling_invoke_tsplit(spdid_t spdid,
+							  td_t parent_tid,
+							  char *param, int len,
+							  tor_flags_t tflags,
+							  evt_t evtid,
+							  struct
+							  __sg_tsplit_marshalling
+							  *md, int sz,
+							  cbuf_t cb);
 static inline void block_cli_if_desc_update_tsplit();
 static inline void block_cli_if_track_tsplit(int ret, spdid_t spdid,
 					     td_t parent_tid, char *param,
@@ -39,16 +59,19 @@ static inline void block_cli_if_track_tsplit(int ret, spdid_t spdid,
 static inline void block_cli_if_invoke_treadp(spdid_t spdid, td_t tid,
 					      int *_retval_cbuf_off,
 					      int *_retval_sz);
+
 static inline void block_cli_if_desc_update_treadp(int id);
 static inline void block_cli_if_track_treadp(int ret, spdid_t spdid, td_t tid,
 					     int *_retval_cbuf_off,
 					     int *_retval_sz);
 static inline void block_cli_if_invoke_twritep(spdid_t spdid, td_t tid,
 					       int cbid, int sz);
+
 static inline void block_cli_if_desc_update_twritep(int id);
 static inline void block_cli_if_track_twritep(int ret, spdid_t spdid, td_t tid,
 					      int cbid, int sz);
 static inline void block_cli_if_invoke_trelease(spdid_t spdid, td_t tid);
+
 static inline void block_cli_if_desc_update_trelease(int id);
 static inline void block_cli_if_track_trelease(int ret, spdid_t spdid,
 					       td_t tid);
@@ -208,20 +231,28 @@ static inline void block_cli_if_desc_update_tsplit()
 {
 }
 
-static inline void block_cli_if_invoke_tsplit(spdid_t spdid, td_t parent_tid,
-					      char *param, int len,
-					      tor_flags_t tflags, evt_t evtid)
+static inline void block_cli_if_marshalling_invoke_tsplit(spdid_t spdid,
+							  td_t parent_tid,
+							  char *param, int len,
+							  tor_flags_t tflags,
+							  evt_t evtid,
+							  struct
+							  __sg_tsplit_marshalling
+							  *md, int sz,
+							  cbuf_t cb)
 {
 	struct desc_track *parent_desc = NULL;
 	if ((parent_desc = call_desc_lookup(parent_tid))) {
 		parent_tid = parent_desc->server_tid;
 	}
 
-	/* else {         // td_root, or in a different component */
-	/*     parent_tid = parent_tid; */
-	/* } */
-	CSTUB_INVOKE(ret, fault, uc, 6, spdid, parent_tid, param, len, tflags,
-		     evtid);
+	md->spdid = spdid;
+	md->parent_tid = parent_tid;
+	md->param = param;
+	md->len = len;
+	md->tflags = tflags;
+	md->evtid = evtid;
+	CSTUB_INVOKE(ret, fault, uc, 3, spdid, cb, sz);
 }
 
 static inline void block_cli_if_track_trelease(int ret, spdid_t spdid, td_t tid)
@@ -297,14 +328,25 @@ static inline void block_cli_if_invoke_treadp(spdid_t spdid, td_t tid,
 CSTUB_FN(td_t, tsplit) (struct usr_inv_cap * uc, spdid_t spdid, td_t parent_tid,
 			char *param, int len, tor_flags_t tflags, evt_t evtid) {
 	struct desc_track *desc = NULL;
+	struct __sg_tsplit_marshalling *md = NULL;
+	cbuf_t cb = 0;
+	int sz = len + sizeof(struct __sg_tsplit_marshalling);
  redo:
 	block_cli_if_desc_update_tsplit();
-	block_cli_if_invoke_tsplit(spdid, parent_tid, param, len, tflags,
-				   evtid);
+
+	md = (struct __sg_tsplit_marshalling *)cbuf_alloc(sz, &cb);
+	assert(md);		// assume we always get cbuf for now
+
+	block_cli_if_marshalling_invoke_tsplit(spdid, parent_tid, param, len,
+					       tflags, evtid, md, sz, cb);
+
 	if (unlikely(fault)) {
 		CSTUB_FAULT_UPDATE();
+		cbuf_free(cb);
 		goto redo;
 	}
+	cbuf_free(cb);
+
 	block_cli_if_track_tsplit(ret, spdid, parent_tid, param, len, tflags,
 				  evtid);
 

@@ -295,10 +295,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_fs.h'
+        filename = 'input/cidl_lock.h'
     
     keywords.init_service_name(filename)    
-    if ("graph" in sys.argv):
+    if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
         keywords.plot_sm_graph()
     
     os.system("gcc -E " + filename +" -o cidl_pre");

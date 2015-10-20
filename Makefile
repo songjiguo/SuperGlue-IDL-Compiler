@@ -12,7 +12,7 @@ MBOX_SERVICE=mbox
 EVENT_SERVICE=event
 TE_SERVICE=te
 
-all: parse_all compile_all
+all: parse_all compile_all plot_all
 
 parse_all: fs_parse lock_parse
 	@echo

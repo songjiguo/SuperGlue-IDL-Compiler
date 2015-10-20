@@ -18,6 +18,9 @@ int tmp;
 #define rd_vect tmp
 #define cvect_lookup(x, y) tmp
 
+#define cbuf_alloc(x, y) 0
+#define cbuf_free(x) 0
+
 #define assert(x) 
 #define unlikely(x) x
 #define likely(x) x

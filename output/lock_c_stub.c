@@ -24,24 +24,28 @@ static inline void block_cli_if_basic_id(int id);
 static inline void block_cli_if_recover_data(struct desc_track *desc);
 static inline void block_cli_if_save_data(int id, void *data);
 static inline void block_cli_if_invoke_lock_component_alloc(spdid_t spd);
+
 static inline void block_cli_if_desc_update_lock_component_alloc();
 static inline void block_cli_if_track_lock_component_alloc(int ret,
 							   spdid_t spd);
 static inline void block_cli_if_invoke_lock_component_take(spdid_t spd,
 							   ul_t lock_id,
 							   u32_t thd_id);
+
 static inline void block_cli_if_desc_update_lock_component_take(int id);
 static inline void block_cli_if_track_lock_component_take(int ret, spdid_t spd,
 							  ul_t lock_id,
 							  u32_t thd_id);
 static inline void block_cli_if_invoke_lock_component_release(spdid_t spd,
 							      ul_t lock_id);
+
 static inline void block_cli_if_desc_update_lock_component_release(int id);
 static inline void block_cli_if_track_lock_component_release(int ret,
 							     spdid_t spd,
 							     ul_t lock_id);
 static inline void block_cli_if_invoke_lock_component_free(spdid_t spd,
 							   ul_t lock_id);
+
 static inline void block_cli_if_desc_update_lock_component_free(int id);
 static inline void block_cli_if_track_lock_component_free(int ret, spdid_t spd,
 							  ul_t lock_id);
