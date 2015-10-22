@@ -398,7 +398,7 @@ CSTUB_FN(int, treadp)(struct usr_inv_cap * uc, spdid_t spdid, td_t tid,
 	return ret;
 }
 
-/* this is just a fake main function for testing. Remove it later  */
+    /* this is just a fake main function for testing. Remove it later  */
 int main()
 {
 	return 0;

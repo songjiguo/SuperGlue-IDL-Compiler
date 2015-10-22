@@ -155,6 +155,8 @@ def init_creation(fdesc, subIFcode, IFcode):
     IFcode["internalfn"] = code
 
 def generate_globalvas(result, IFcode):
+    IFcode["s_stub.S"] = []
+    
     code = IFcode["trackds"]["code"]
     IFcode["trackds"] = {"fields":[]}
    
@@ -276,6 +278,12 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         inkcode = inkcode.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
         inkcode = inkcode.replace("IDL_from_spd", param_list[0])       
         subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
+        
+        # prepare for s_stub.S
+        tmp = IFcode["s_stub.S"]
+        tmp.append((fdesc[0], "__ser_"+fdesc[0]))
+        IFcode["s_stub.S"] = tmp
+                
     else:
         tmp = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"].split('\n', 1)[0][:-2]+";"
         IFcode["internalfn_decl"] = IFcode["internalfn_decl"].replace(tmp, "") # remove the static declaration
@@ -295,6 +303,7 @@ def marshalling(result, fdesc, subIFcode, IFcode):
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #no_match_code_list = []
     
+    tmp_s_stubS = []
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
         subIFcode, subIFcode["parameters"],subIFcode["blocks"], subIFcode["state"] = ({} for i in range(4)) 
@@ -340,8 +349,9 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             init_creation(fdesc, subIFcode, IFcode)
 
         IFcode[fdesc[0]] = subIFcode
+        
         #print(IFcode[fdesc[0]])
-    #print (IFcode["tsplit"]["blocks"]["BLOCK_CLI_IF_INVOKE"])
+    #pprint (IFcode)
     #exit()
     # this is the non-match list and should be empty static inline function ?? why need this?
     #print (''.join(no_match_code_list))
@@ -579,7 +589,7 @@ def recover_sm_transition(state_list, smg, IFcode):
 def construct_server_code(result, IFcode):
     server_code = ""  
     IFresult = {}
-                
+               
     IFresult["SERVER"]  = {"tracds" : IFcode["server"]["server_trackds"]["code"]}
     server_code = "\n" + server_code + IFresult["SERVER"]["tracds"]
     final_id = IFcode["trackds"]["desc_id"][1]                                     
@@ -588,31 +598,52 @@ def construct_server_code(result, IFcode):
     for k, v in IFcode["server"]["server_code"].items():
         if ("IDL_block_fname" in v):  # block
             IFresult["SERVER"]["block_func"]["code"] = v
-            IFresult["SERVER"]["block_func"]["info"] = IFcode["server"]["server_block"]
-            server_code = server_code + IFresult["SERVER"]["block_func"]["code"]
+            fninfo = IFcode["server"]["server_block"]
+            server_code = server_code + v
             server_code = server_code + "\n"
-            server_code = server_code.replace("IDL_block_fname", IFresult["SERVER"]["block_func"]["info"][0])
+            server_code = server_code.replace("IDL_block_fname", fninfo[0])
+            #code = code.replace("IDL_fntype", func.info["functype"])
             server_code = server_code.replace("IDL_parsdecl", 
-                                      IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["parameters"]["params_decl"])
-            tmp_par = IFcode[IFresult["SERVER"]["block_func"]["info"][0]]["parameters"]["params"]
+                                      IFcode[fninfo[0]]["parameters"]["params_decl"])
+            
+            tmp_par = IFcode[fninfo[0]]["parameters"]["params"]
             from_spd = tmp_par.split(',')[0]
             server_code = server_code.replace("IDL_from_spd", from_spd)
             server_code = server_code.replace("IDL_block_params", tmp_par)
+            # find the type for bock function            
+            for tup in result.tuple:
+                for func in tup.functions:
+                    if (fninfo[0] == func.info["funcname"]):
+                        server_code = server_code.replace("IDL_fntype", func.info["functype"])
+            # prepare for s_stub.S
+            tmp = IFcode["s_stub.S"]
+            tmp.append((fninfo[0], "__ser_"+fninfo[0]))
+            IFcode["s_stub.S"] = tmp
+            
         if ("IDL_wakeup_fname" in v): # wakeup
             IFresult["SERVER"]["wakeup_func"]["code"] = v
-            IFresult["SERVER"]["wakeup_func"]["info"] = IFcode["server"]["server_wakeup"]
-            server_code = server_code + IFresult["SERVER"]["wakeup_func"]["code"]
+            fninfo = IFcode["server"]["server_wakeup"]            
+            server_code = server_code + v
             server_code = server_code + "\n"
-            server_code = server_code.replace("IDL_wakeup_fname", IFresult["SERVER"]["wakeup_func"]["info"][0])
+            server_code = server_code.replace("IDL_wakeup_fname", fninfo[0])
             
             # make sure the para in () is consistent with the wakeup function 
-            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["parameters"]["params_decl"]
+            tmp_par = IFcode[fninfo[0]]["parameters"]["params_decl"]
             from_spd = tmp_par.split(',')[0].split(' ')[1]
             server_code = server_code.replace("IDL_from_spd", from_spd)
             # make sure we use the tracked id
-            tmp_par = IFcode[IFresult["SERVER"]["wakeup_func"]["info"][0]]["parameters"]["params"]
+            tmp_par = IFcode[fninfo[0]]["parameters"]["params"]
             tmp_par = tmp_par.replace(final_id, "tb->"+final_id)
-            server_code = server_code.replace("IDL_wakeup_params", tmp_par) 
+            server_code = server_code.replace("IDL_wakeup_params", tmp_par)
+            
+            # prepare for s_stub.S
+            tmp = IFcode["s_stub.S"]
+            tmp.append(("client_fault_notification", "__ser_client_fault_notification"))
+            IFcode["s_stub.S"] = tmp
+            
+            #print(server_code)
+            #pprint(IFcode["server"])
+            #exit()
 
     server_code = server_code.replace("IDL_id", final_id)
 
@@ -672,44 +703,79 @@ def construct_client_code(result, IFcode):
     
     return result_code
 
+def construct_s_stub_code(result, IFcode):
+    result_code = """/**
+ * IDL genereated
+ *
+ */
+#include <cos_asm_server_stub.h>
+    
+.text
+    """
+    tmp_list = []
+    for item in IFcode["s_stub.S"]:
+        result_code = result_code + "\ncos_asm_server_fn_stub_spdid(" + item[0] + "," + item[1]+ ")"
+        tmp_list.append(item[0])
+        
+    for item in result.tuple[0].functions:
+        if (item.info["funcname"] in tmp_list):
+            continue
+        result_code = result_code + "\ncos_asm_server_stub_spdid(" + item.info["funcname"] + ")"
+                
+    return result_code
+    
 def write_code_to_file(code, output_file):
-    # write out the result to the file (easier debug)
+    # write out the result to the file (easier debug)    
+    if (output_file[-1] != "c"):
+        with open(output_file, "w") as text_file:
+            text_file.write("{0}".format(code))
+        return
 
     #pprint(IFcode)
     #exit()
-    # make a fake main function for testing only        
-    if (using_main):
-        fake_main = r"""
-/* this is just a fake main function for testing. Remove it later  */
-int main()
-{
-    return 0;
-}
-"""
-        code = code + "\n" + fake_main
+    if (keywords.final_output == 0):    
+        # make a fake main function for testing only        
+        if (using_main):
+            fake_main = r"""
+    /* this is just a fake main function for testing. Remove it later  */
+    int main()
+    {
+        return 0;
+    }
+    """
+            code = code + "\n" + fake_main
         
-    code = r'''#include "cidl_gen.h"''' + "\n" + code 
+        code = r'''#include "cidl_gen.h"''' + "\n" + code 
     
     with open("tmp.c", "w") as text_file:
         text_file.write("{0}".format(code))
     os.system("indent -linux tmp.c -o " + output_file)
     os.system("rm tmp.c")
 
-    # generate the new ast for the interface code
-    parser = c_parser.CParser()
-    ast = parse_file(output_file, use_cpp=True,
-                     cpp_path='cpp',
-                     cpp_args=r'-Iutils/fake_libc_include')    
-    #ast.show()
+    if (keywords.final_output == 0): 
+        # generate the new ast for the interface code (only for c file)
+        parser = c_parser.CParser()
+        ast = parse_file(output_file, use_cpp=True,
+                         cpp_path='cpp',
+                         cpp_args=r'-Iutils/fake_libc_include')    
+        #ast.show()
     
 def paste_idl_code(result, IFcode):
     sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
+    if (keywords.final_output == 1):
+        sname = "final_" + sname
+
     # client side code
     client_code = construct_client_code(result, IFcode)
     write_code_to_file(client_code, "output/" + sname + "_c_stub.c")  
+    
     # server side code
     server_code = construct_server_code(result, IFcode)
     write_code_to_file(server_code, "output/" + sname + "_s_cstub.c")
+    
+    # s_stub.S
+    s_stub_code = construct_s_stub_code(result, IFcode)
+    write_code_to_file(s_stub_code, "output/" + sname + "_s_stub.S")
     
     print ("IDL process is done!!")
 
@@ -756,7 +822,8 @@ def idl_generate(result, parsed_ast):
     #print(IFcode["internalfn_decl"])
     #for item in globalblocks:
     #item.show()
-    
     #exit()
     
     paste_idl_code(result, IFcode)   # make some further IFprocess here
+    
+    #pprint(IFcode)

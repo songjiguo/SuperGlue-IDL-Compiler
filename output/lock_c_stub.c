@@ -304,7 +304,7 @@ CSTUB_FN(int, lock_component_free)(struct usr_inv_cap * uc, spdid_t spd,
 	return ret;
 }
 
-/* this is just a fake main function for testing. Remove it later  */
+    /* this is just a fake main function for testing. Remove it later  */
 int main()
 {
 	return 0;

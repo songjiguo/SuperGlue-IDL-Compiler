@@ -300,6 +300,9 @@ if __name__ == "__main__":
     keywords.init_service_name(filename)    
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
         keywords.plot_sm_graph()
+
+    if (len(sys.argv) == 3 and sys.argv[2] == "final"):
+        keywords.final_code()
     
     os.system("gcc -E " + filename +" -o cidl_pre");
     #os.system("cat cidl_pre");

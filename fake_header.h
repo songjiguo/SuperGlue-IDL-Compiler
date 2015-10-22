@@ -73,14 +73,14 @@ int tmp;
 	ADD_LIST(LAST_LIST(head, next, prev), new, next, prev)
 
 
-int tsplit();
-int treadp();
-int twritep();
-int trelease();
+int tsplit(){}
+int treadp(){}
+int twritep(){}
+int trelease(){}
 
-unsigned long lock_component_alloc();
-int lock_component_free();
-int lock_component_take();
-int lock_component_release();
+unsigned long lock_component_alloc(){}
+int lock_component_free(){}
+int lock_component_take(){}
+int lock_component_release(){}
 
 #endif /* _cos_fake_header_h */

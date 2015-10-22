@@ -1,5 +1,9 @@
 ///////////////////////////////////////////////
+///////////////////////////////////////////////
+///////////////////////////////////////////////
 /* client interface   */
+///////////////////////////////////////////////
+///////////////////////////////////////////////
 ///////////////////////////////////////////////
 
 // client track start
@@ -481,7 +485,11 @@ redo:
 // client cstub end
 
 ///////////////////////////////////////////////
+///////////////////////////////////////////////
+///////////////////////////////////////////////
 /* server interface   */
+///////////////////////////////////////////////
+///////////////////////////////////////////////
 ///////////////////////////////////////////////
 
 // server track start
@@ -515,6 +523,11 @@ static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
 	
 	return ret;
 }
+
+IDL_fntype __ser_IDL_block_fname(IDL_parsdecl) {
+	return block_ser_if_block_track_IDL_block_fname(IDL_block_params);
+}
+
 // block_ser_if_block_track 1 end
 
 // block_ser_if_block_track no match start
@@ -529,7 +542,7 @@ static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
 server_wakeup
 // block_ser_if_client_fault_notification pred 1 end
 // block_ser_if_client_fault_notification 1 start
-static inline block_ser_if_client_fault_notification(IDL_from_spd) {
+static inline void block_ser_if_client_fault_notification(int IDL_from_spd) {
 	struct track_block *tb;	
 	
 	// TAKE LOCK
@@ -544,15 +557,24 @@ static inline block_ser_if_client_fault_notification(IDL_from_spd) {
 
 	return;
 }
+
+void __ser_client_fault_notification(int IDL_from_spd) {
+	return block_ser_if_client_fault_notification(IDL_from_spd);
+}
+
 // block_ser_if_client_fault_notification 1 end
 
 // block_ser_if_client_fault_notification no match start
-static inline block_ser_if_client_fault_notification(spdid_t spdid) {
+static inline void block_ser_if_client_fault_notification(spdid_t spdid) {
 }
 // block_ser_if_client_fault_notification no match end
 
 ///////////////////////////////////////////////
-/* parameter marshalling with cbuf   */
+///////////////////////////////////////////////
+///////////////////////////////////////////////
+/* marshalling with cbuf   */
+///////////////////////////////////////////////
+///////////////////////////////////////////////
 ///////////////////////////////////////////////
 
 // marshalling ds start

@@ -25,7 +25,13 @@ static inline int block_ser_if_block_track_lock_component_take(spdid_t spd,
 	return ret;
 }
 
-static inline block_ser_if_client_fault_notification(spd)
+int __ser_lock_component_take(spdid_t spd, ul_t lock_id, u32_t thd_id)
+{
+	return block_ser_if_block_track_lock_component_take(spd, lock_id,
+							    thd_id);
+}
+
+static inline void block_ser_if_client_fault_notification(int spd)
 {
 	struct track_block *tb;
 
@@ -41,7 +47,12 @@ static inline block_ser_if_client_fault_notification(spd)
 	return;
 }
 
-/* this is just a fake main function for testing. Remove it later  */
+void __ser_client_fault_notification(int spd)
+{
+	return block_ser_if_client_fault_notification(spd);
+}
+
+    /* this is just a fake main function for testing. Remove it later  */
 int main()
 {
 	return 0;

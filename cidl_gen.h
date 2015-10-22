@@ -81,6 +81,6 @@ struct usr_inv_cap {int a;};
 // this is only for AST paser, remove later!!!!!
 #define CVECT_CREATE_STATIC(x) 
 #define CSLAB_CREATE(x, y)
-#define CSTUB_FN(x, y) x y
+#define CSTUB_FN(x, y) x y##a
 
 #endif /* _cos_idl_h */

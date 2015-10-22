@@ -24,7 +24,7 @@ plot_all: fs_plot lock_plot
 	@echo
 
 fs_parse:
-	@echo
+	@echo $(FINAL_CODE)
 	@echo "IDL process starting.... <<<"$(FS_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(FS_SERVICE).h
 
@@ -56,3 +56,20 @@ lock_compile:
 	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_c_stub.c
 	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
+
+
+
+final: parse_all_final
+
+parse_all_final: fs_parse_final lock_parse_final
+	@echo
+
+fs_parse_final:
+	@echo $(FINAL_CODE)
+	@echo "IDL process starting.... <<<"$(FS_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(FS_SERVICE).h final
+
+lock_parse_final:
+	@echo
+	@echo "IDL process starting.... <<<"$(LOCK_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(LOCK_SERVICE).h final

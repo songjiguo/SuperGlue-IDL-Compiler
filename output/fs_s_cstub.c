@@ -6,7 +6,7 @@ struct track_block {
 };
 struct track_block tracking_block_list[MAX_NUM_SPDS];
 
-/* this is just a fake main function for testing. Remove it later  */
+    /* this is just a fake main function for testing. Remove it later  */
 int main()
 {
 	return 0;

@@ -17,6 +17,7 @@ from igraph import *
 
 service_name = ""
 plot_graph = 0
+final_output = 0
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
@@ -39,6 +40,10 @@ def init_service_name(s_name):
 def plot_sm_graph():
     global plot_graph
     plot_graph = 1
+
+def final_code():
+    global final_output
+    final_output = 1
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
