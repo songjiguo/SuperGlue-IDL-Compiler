@@ -17,6 +17,18 @@ int IDL_desc_saved_params;  // TODO: fix this
 int tmp;
 #define rd_vect tmp
 #define cvect_lookup(x, y) tmp
+#define cos_map_lookup(x, y) tmp
+
+#define ramfs_desc_maps tmp
+#define cslab_alloc_ramfs_slab() NULL
+#define cslab_free_ramfs_slab(x) NULL
+
+#define lock_desc_maps tmp
+#define cslab_alloc_lock_slab() NULL
+#define cslab_free_lock_slab(x) NULL
+
+#define cos_map_add(x, y) 0
+#define cos_map_del(x, y) 0
 
 #define cbuf_alloc(x, y) 0
 #define cbuf_free(x) 0
@@ -81,6 +93,13 @@ int trelease(){}
 unsigned long lock_component_alloc(){}
 int lock_component_free(){}
 int lock_component_take(){}
+int lock_component_pretake(){}
 int lock_component_release(){}
+
+int sched_component_take(){}
+int sched_component_release(){}
+#define BUG(); {;}
+
+int cbuf2buf(){}
 
 #endif /* _cos_fake_header_h */

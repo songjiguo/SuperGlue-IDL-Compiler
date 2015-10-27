@@ -28,7 +28,18 @@ enum {
  terminal
 };
 
+enum {
+ sched,
+ mem_mgr,
+ torrent,
+ lock,
+ evt,
+ timed_blk,
+ mbox
+};
+
 struct global_info {
+ int service_name;
   int desc_close;
   int desc_dep_create;
   int desc_dep_close;
@@ -37,7 +48,7 @@ struct global_info {
   int desc_has_data;
   int resc_has_data;
 };
-# 42 "input/cidl_gen.h"
+# 55 "input/cidl_gen.h"
 typedef int td_t;
 typedef int cbuf_t;
 typedef int spdid_t;
@@ -53,6 +64,7 @@ struct usr_inv_cap {int a;};
 # 5 "input/cidl_lock.h" 2
 
 struct global_info sgi = {
+ .service_name = lock,
         .desc_close = itself,
         .desc_dep_create = single,
         .desc_dep_close = none,
@@ -64,24 +76,30 @@ struct global_info sgi = {
 
 void SM_creation_SM_lock_component_alloc;
 void SM_transition_SM_lock_component_alloc_SM_lock_component_free;
-void SM_transition_SM_lock_component_alloc_SM_lock_component_take;
+void SM_transition_SM_lock_component_alloc_SM_lock_component_pretake;
+void SM_transition_SM_lock_component_pretake_SM_lock_component_take;
 void SM_transition_SM_lock_component_take_SM_lock_component_release;
-void SM_transition_SM_lock_component_release_SM_lock_component_take;
+void SM_transition_SM_lock_component_release_SM_lock_component_pretake;
 void SM_transition_SM_lock_component_release_SM_lock_component_free;
 void SM_terminal_SM_lock_component_free;
 
 typedef ul_t CD_desc_data_retval_CD_ul_t_CD_lock_id; CD_desc_data_retval_CD_ul_t_CD_lock_id
-lock_component_alloc(spdid_t CD_desc_data_CD_spd);
+lock_component_alloc(spdid_t CD_desc_data_CD_spdid);
 
 int
-lock_component_take(spdid_t spd,
-     ul_t CD_desc_lookup_CD_server_block_CD_lock_id,
-     u32_t thd_id);
+lock_component_take(spdid_t spdid,
+      ul_t CD_desc_lookup_CD_server_block_CD_lock_id,
+      u32_t CD_desc_data_CD_thd_id);
 
 int
-lock_component_release(spdid_t spd,
-        ul_t CD_desc_lookup_CD_server_wakeup_CD_lock_id);
+lock_component_pretake(spdid_t spdid,
+         ul_t CD_desc_lookup_CD_lock_id,
+         u32_t thd_id);
 
 int
-lock_component_free(spdid_t spd,
-     ul_t CD_desc_terminate_CD_lock_id);
+lock_component_release(spdid_t spdid,
+         ul_t CD_desc_lookup_CD_server_wakeup_CD_lock_id);
+
+int
+lock_component_free(spdid_t spdid,
+      ul_t CD_desc_terminate_CD_lock_id);

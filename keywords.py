@@ -12,12 +12,15 @@
 #==============================================================================
 
 from pprint import pprint
-import subprocess, re
+import subprocess, re, time
 from igraph import *
 
+IDL_ver = "IDL generated code ver 0.1"
+
 service_name = ""
-plot_graph = 0
-final_output = 0
+header       = ""
+plot_graph   = False
+final_output = False
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
@@ -39,11 +42,11 @@ def init_service_name(s_name):
    
 def plot_sm_graph():
     global plot_graph
-    plot_graph = 1
+    plot_graph = True
 
 def final_code():
     global final_output
-    final_output = 1
+    final_output = True
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
@@ -248,12 +251,18 @@ def read_from_template_code(IFcode):
     code, err = p.communicate()
     IFcode["cstub"] = code
 
+    cmd = 'sed -nr \"/\<client cstub no redo start\>/{:a;n;/'\
+          '\<client cstub no redo end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["cstub no redo"] = code
+
     cmd = 'sed -nr \"/\<client cstub marshalling start\>/{:a;n;/'\
           '\<client cstub marshalling end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["marshalling cstub"] = code
-    
+
     cmd = 'sed -nr \"/\<client state_fptr start\>/{:a;n;/'\
           '\<client state_fptr end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
@@ -278,11 +287,34 @@ def read_from_template_code(IFcode):
     code, err = p.communicate()
     IFcode["server"] = {"server_trackds" : {"code" : code}}
 
+    cmd = 'sed -nr \"/\<server marshalling_invoke start\>/{:a;n;/'\
+          '\<server marshalling_invoke end\>/b;p;ba} \" code_template.c'
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["marshalling server invoke fn"] = code
+
     cmd = 'sed -nr \"/\<marshalling ds start\>/{:a;n;/'\
           '\<marshalling ds end\>/b;p;ba} \" code_template.c'
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["marshalling ds"] = {"code" : code}
+
+
+def get_lock_function(IFcode, service_name):
+    composite_path = '/home/songjiguo/research/composite/src'
+    cmd = 'find ' + composite_path + " -name " + service_name + ".c"
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    path, err = p.communicate()
+    cmd = 'sed -nr \"/\<lock take start\>/{:a;n;/'\
+          '\<lock take end\>/b;p;ba} \" ' + path
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["lock_take_func"] = code.replace("\\","")
+    cmd = 'sed -nr \"/\<lock release start\>/{:a;n;/'\
+          '\<lock release end\>/b;p;ba} \" ' + path
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["lock_release_func"] = code.replace("\\","")
 
 # pycparser related
 typedecl                    = "TypeDecl"
@@ -397,8 +429,8 @@ def  draw_sm_transition(smg):
     # Update the graph with the color and width for the fault path
     smg.es['width'] = widths
     smg.es['color'] = colors 
-    
-    sname = re.findall(r'cidl_(.*?).h',service_name + "_c_stub.c")[0]
+    #sname = re.findall(r'cidl_(.*?).h',service_name + "_c_stub.c")[0]
+    sname = service_name
     plot(smg, "output/SM_"+sname+".svg", **visual_style)
     #plot(smg, **visual_style)
     
@@ -413,6 +445,53 @@ def  draw_sm_transition(smg):
     # testg = smg + parent_smg
     # plot(testg, **visual_style)
     #===========================================================================
+
+slab_alloc_str = '''
+extern void *alloc_page(void);
+extern void free_page(void *ptr);
+
+#define CSLAB_ALLOC(sz)   alloc_page()
+#define CSLAB_FREE(x, sz) free_page(x)
+#include <cslab.h>
+
+#define CVECT_ALLOC() alloc_page()
+#define CVECT_FREE(x) free_page(x)
+#include <cvect.h>
+'''
+
+init_map_str = '''
+if (unlikely(!IDL_service_desc_maps.data.depth)) {
+cos_map_init_static(&IDL_service_desc_maps);
+}
+'''
+
+def add_c_header():
+    header = "/* " + IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
+    header = header + r'''#include <cos_component.h>''' + "\n"
+    header = header + r'''#include <sched.h>''' + "\n"
+    header = header + r'''#include <print.h>''' + "\n"
+    header = header + r'''#include <cos_debug.h>''' + "\n"
+    header = header + r'''#include <cos_map.h>''' + "\n"
+    header = header + r'''#include <cos_list.h>''' + "\n"
+    header = header + r'''#include <cstub.h>''' + "\n"
+    header = header + r'''#include <'''+ service_name  + ".h>\n"
+    header = header + slab_alloc_str + "\n"
+    header = header + "\n"
+    return header
+
+def add_s_header():
+    header = "/* " + IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
+    header = header + r'''#include <cos_component.h>''' + "\n"
+    header = header + r'''#include <sched.h>''' + "\n"
+    header = header + r'''#include <print.h>''' + "\n"
+    header = header + r'''#include <cos_debug.h>''' + "\n"
+    header = header + r'''#include <cos_map.h>''' + "\n"
+    header = header + r'''#include <cos_list.h>''' + "\n"
+    header = header + r'''#include <cstub.h>''' + "\n"
+    header = header + r'''#include <'''+ service_name  + ".h>\n"
+    header = header + "\n"
+    return header
+
   
 # these are just some util functions  
 DEBUG = 0

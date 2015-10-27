@@ -20,7 +20,18 @@ enum {
 	terminal
 };
 
+enum {
+	sched,
+	mem_mgr,
+	torrent,  // need differentiate the fs and mbox..... TODO
+	lock,
+	evt,
+	timed_blk,
+	mbox
+};
+
 struct global_info {
+	int service_name;
  	int desc_close;
  	int desc_dep_create;
  	int desc_dep_close;
@@ -29,6 +40,8 @@ struct global_info {
  	int desc_has_data;
  	int resc_has_data;
 };
+#define SERVICE         .service_name
+
 #define DESC_CLOSE      .desc_close
 #define DESC_DEP_CREATE .desc_dep_create
 #define DESC_DEP_CLOSE 	.desc_dep_close
@@ -80,6 +93,7 @@ struct usr_inv_cap {int a;};
 
 // this is only for AST paser, remove later!!!!!
 #define CVECT_CREATE_STATIC(x) 
+#define COS_MAP_CREATE_STATIC(x) 
 #define CSLAB_CREATE(x, y)
 #define CSTUB_FN(x, y) x y##a
 

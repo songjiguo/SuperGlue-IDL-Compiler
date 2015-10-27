@@ -295,7 +295,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_lock.h'
+        filename = 'input/cidl_ramfs.h'
     
     keywords.init_service_name(filename)    
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     # pprint (result.tuple[0].functions[3].info)
     # print("")
     #===========================================================================
-    #exit()
+    # exit()
   
     c3_gen.idl_generate(result, ast)
     

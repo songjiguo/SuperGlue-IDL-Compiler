@@ -11,13 +11,14 @@ from __future__ import print_function
 from pycparser import parse_file, preprocess_file
 from pycparser import c_parser, c_ast, c_generator, c_parser, c_generator
 from pprint import pprint
-import keywords, sys, os, re
+import keywords, sys, os, re, time
 from igraph import *
 
 import c3_parser
 
 using_main = 1
 max_params = 4  # up to 4 parameters in Composite
+write_to_file = 1
 
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int IDL_server_id"
@@ -124,7 +125,10 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
     code = code.replace("IDL_fname", name)
     
     if (fdesc[2] != "creation"):
-        code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
+        server_id_param = subIFcode["parameters"]["params"]
+        server_id_param = server_id_param.replace(IFcode["trackds"]["desc_id"][1], \
+                                                    "desc->server_" + IFcode["trackds"]["desc_id"][1])
+        code = code.replace("IDL_server_id_params", server_id_param)
 
     for tup in result.tuple:
         for func in tup.functions:
@@ -156,6 +160,7 @@ def init_creation(fdesc, subIFcode, IFcode):
 
 def generate_globalvas(result, IFcode):
     IFcode["s_stub.S"] = []
+    keywords.get_lock_function(IFcode, keywords.service_name)
     
     code = IFcode["trackds"]["code"]
     IFcode["trackds"] = {"fields":[]}
@@ -238,7 +243,7 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
 # 2) passing pointer, and which is not "__retval" type
 def marshalling(result, fdesc, subIFcode, IFcode):
     param_list = subIFcode["parameters"]["params"].split(",")
-    paramdecl_list = subIFcode["parameters"]["params_decl"].split(",")
+    paramdecl_list = subIFcode["parameters"]["params_decl"].split(", ")
 
     cond_1 = (len(param_list) > max_params)
     cond_2 = ("*" in ', '.join(paramdecl_list))
@@ -253,16 +258,22 @@ def marshalling(result, fdesc, subIFcode, IFcode):
     if (cond_1 and cond_2):
         #print(param_list)
         #print(paramdecl_list)
-        tmp = ""
-        for item in param_list:
-            tmp = tmp + "md->"+item.strip()+ " = "+ item.strip() + ";\n"
-        marshalling_cons = tmp[:-2] # remove the last ";"
-        tmp = ""
+        #print(fdesc[0])
+        
+        tmp_cons = ""
+        tmp_decl = ""
         for item in paramdecl_list:
-            tmp = tmp + item + ";\n"
-        marshalling_parsdecl = tmp[:-2] # remove the last ";"
-        len_idx = list(traverse(fdesc)).index("size_of") + 3
-        len_var = list(traverse(fdesc))[len_idx]
+            if ("*" in item):  # no need to pass any pointer, this is the marshalling already
+                continue
+            tmp_cons = tmp_cons + "md->"+item.split(" ")[1]+ " = "+ item.split(" ")[1] + ";\n"
+            tmp_decl = tmp_decl + item + ";\n"
+        marshalling_parsdecl = tmp_decl[:-2] # remove the last ";"
+        marshalling_cons     = tmp_cons[:-2] 
+        
+        len_var = ""
+        if ("size_of" in list(traverse(fdesc))) :
+            len_idx = list(traverse(fdesc)).index("size_of") + 3
+            len_var = list(traverse(fdesc))[len_idx]
         
         marshalling_ds   = IFcode["marshalling ds"]["code"]
         marshalling_ds = marshalling_ds.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
@@ -271,10 +282,11 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         cstub_code = marshalling_code
         cstub_code = cstub_code.replace("IDL_marshalling_cons", marshalling_cons)                     
         cstub_code = cstub_code.replace("IDL_from_spd", param_list[0])
-        cstub_code = cstub_code.replace("IDL_data_len", len_var)
+        if (len_var):
+            cstub_code = cstub_code.replace("IDL_data_len", len_var)
         
         inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] 
-        inkcode = inkcode.replace("IDL_marshalling_cons", marshalling_cons)                      
+        inkcode = inkcode.replace("IDL_marshalling_cons", marshalling_cons)                    
         inkcode = inkcode.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
         inkcode = inkcode.replace("IDL_from_spd", param_list[0])       
         subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
@@ -283,23 +295,50 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         tmp = IFcode["s_stub.S"]
         tmp.append((fdesc[0], "__ser_"+fdesc[0]))
         IFcode["s_stub.S"] = tmp
-                
+        
+        # prepare for marshalled server fn
+        marshalling_server_fn = IFcode["marshalling server invoke fn"]        
+        unpacked_pars = []
+        # here we compute the space for each passed in data
+        offset = "0"
+        for item in paramdecl_list:
+            if ("*" in item):
+                unpacked_pars. append("&md->data[" + offset + "]")
+                offset = paramdecl_list[paramdecl_list.index(item)+1].split(" ")[1]
+                offset = "md->"+offset + "+1"
+            else:
+                unpacked_pars.append("md->"+item.split(" ")[1])
+        marshalling_server_fn = marshalling_server_fn.replace("IDL_marshalling_finalpars", 
+                                                              ", ".join(unpacked_pars))
+        marshalling_server_fn = marshalling_server_fn.replace("IDL_decl_from_spd", paramdecl_list[0])
+        subIFcode["marshall fn"] = marshalling_server_fn
+        
     else:
         tmp = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"].split('\n', 1)[0][:-2]+";"
         IFcode["internalfn_decl"] = IFcode["internalfn_decl"].replace(tmp, "") # remove the static declaration
         subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
         subIFcode["marshall ds"] = ""
+        
         cstub_code = IFcode["cstub"]
+        # the wake up function no need to redo, since 
+        # 1) the fault has removed the data structure, and
+        # 2) reflection has woken up the "blocked" threads, 
+        #    which is supposed done by the wake up function anyway 
+        if (("server_block" in IFcode["server"] and fdesc[0] == IFcode["server"]["server_block"][0]) or
+            ("server_wakeup" in IFcode["server"] and fdesc[0] == IFcode["server"]["server_wakeup"][0])):
+            cstub_code = IFcode["cstub no redo"]   # overwrite the cstub_code here for block/wakeup function
+            
         inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
         marshalling_ds = ""
 
+    # marshalling
     subIFcode["cstub_fn"] = replace_params(result, fdesc, cstub_code, IFcode, 
                                            subIFcode, param_list, paramdecl_list)
     subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = replace_params(result, fdesc, inkcode, IFcode, 
                                                  subIFcode, param_list, paramdecl_list)
     subIFcode["marshall ds"] = replace_params(result, fdesc, marshalling_ds, IFcode, 
-                                                 subIFcode, param_list, paramdecl_list)        
-
+                                                 subIFcode, param_list, paramdecl_list)
+            
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #no_match_code_list = []
     
@@ -342,7 +381,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
         code = "IDL_fname(IDL_desc_saved_params)" # add this function to the edge later
         subIFcode["state"]["state_fn"] = replace_params(result, fdesc, code, IFcode, 
                                                         subIFcode, param_list, paramdecl_list)
-        
+        subIFcode["marshall fn"] = []
         marshalling(result, fdesc, subIFcode, IFcode)
 
         if (fdesc[2] == "creation"):
@@ -361,6 +400,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
+        keywords.init_service_name(result.gvars["global_info"]["service_name"])
         for key, value in tup.info.iteritems():
             globaldescp.append(key+"_"+value)
 
@@ -427,7 +467,11 @@ def update_current_state(result, state_list, IFcode):
             for item in state_list:
                 if (func.info[func.name] == item.split("state_")[1]):
                     code = IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]
-                    code = code.replace("IDL_curr_state", str(item))
+                    code = code.replace("IDL_curr_state", "desc->state = " + str(item))
+                    IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
+                else:
+                    code = IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]
+                    code = code.replace("IDL_curr_state;", "")
                     IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
  
 def construct_sm_graph(from_list, to_list, state_list, IFcode):
@@ -461,6 +505,14 @@ def generate_sm_transition(result, funcblocks, IFcode):
     for tup in result.tuple:
         # here we fix the start and end to be 1st and 2nd in the list
         for func in tup.functions:
+            
+            ##!!!!!!!! 
+            ##!!!!!!!! Ignore non-state function. TODO: add this into cidl_ file
+            ##!!!!!!!! 
+            if (func.info[func.name] == "trmeta" or
+                func.info[func.name] == "twmeta"):
+                continue
+            
             if (func.info[func.sm_state] == "creation"):
                 fn_list.insert(0, func.info[func.name])
                 state_list.insert(0, "state_"+func.info[func.name])
@@ -497,17 +549,22 @@ def generate_sm_transition(result, funcblocks, IFcode):
     code = IFcode["sm"]
     code = code.replace("IDL_state_list", ', '.join(state_list))
     code = code.replace("IDL_transition_rules", ' '.join(transition_list_code))
-    IFcode["sm"] = code 
+    IFcode["sm"] = code
+
+    # update the initial state in BLOCK_BASIC
+    code = IFcode["global"]["BLOCK_CLI_IF_BASIC_ID"]
+    code = code.replace("IDL_init_state", state_list[0])
+    IFcode["global"]["BLOCK_CLI_IF_BASIC_ID"] = code
     
     # update the SM state and transition function for recovery
-    update_current_state(result, state_list, IFcode)    
+    update_current_state(result, state_list, IFcode) 
     smg = construct_sm_graph(from_list, to_list, state_list, IFcode)
 
     # this is the key to the c3 recovery
     recover_sm_transition(state_list, smg, IFcode)
     
     # plot the state transition
-    if (keywords.plot_graph):      
+    if (keywords.plot_graph == True):      
         keywords.draw_sm_transition(smg)
 
     return smg
@@ -525,61 +582,124 @@ def generate_sm_transition(result, funcblocks, IFcode):
 #       reachability check (i.e., among all possible paths, select the shortest path)
 def recover_sm_transition(state_list, smg, IFcode):
     rec_path = {}
-    tmp = ""
+    rec_code = ""
     transition_code = IFcode["state_transition"]    
     creation_v = smg.vs.find(name = state_list[0])   # creation node
-    for edge in smg.es:
-        tmp_dict = {}      
-        if (edge["retcode"] == "faulty" or  
-            smg.vs(edge.source)["name"][0] == "state_null"):
+    
+    for item in state_list:
+        tmp_dict = {}
+        #print(item)
+        if (item == "state_null"):
             continue
-        else:
-            before = smg.vs(edge.source)["name"][0]
-            after  = smg.vs(edge.target)["name"][0] 
-            
-            # NOTE: this should be taken care by the BLOCK_CLI_IF_RECOVER
-            # ********************************************************************
-            # first: add the edge to the initial state (recreated by the creation)
-            # ********************************************************************
-            #rec_edge = smg.es.select(_source = edge.source, _target=creation_v.index)
-            #tmp_dict["rec_init"] = (rec_edge["func"], creation_v["name"])
-            #print(rec_edge["func"])
+        other_v = smg.vs.find(name = item)
+        
+        # condition 1: for wakeup function, no need to find a path. See "cstub no redo" 
+        if ("server_wakeup" in IFcode["server"]):
+            if (item.replace("state_", "") == IFcode["server"]["server_wakeup"][0]):
+                continue;
 
-            # NOTE: this will any necessary edge (function) along the rec path. 
-            #       if the creation can reach the target directly, this can be none 
-            # ********************************************************************
-            # second: check if there is a reachable path from the initial state
-            #         back to the target state (the one failed to transit to)
-            # ********************************************************************
-            back_edges = smg.get_shortest_paths(creation_v.index, edge.target, 
+        back_edges = smg.get_shortest_paths(creation_v.index, other_v.index, 
                                                 mode = 'OUTPUT', output="epath")
-            # does not include the last function call (will be done by "redo")
-            back_edges.pop()
-            for _eidx in back_edges:
-                if (_eidx):
-                    recfn_list = []
-                    for eid in _eidx:
-                        recfn_list.append((smg.es[eid]["func"], 
-                                           smg.vs(smg.es[eid].target)["name"][0]))
-                    tmp_dict["rec_steps"] = recfn_list   # TODO: append these together
+        # does not include the last function call (will be done by "redo")
+        # back_edges.pop()
         
-        # now we have all edges to rebuild the state for current state transition (this edge)            
-        rec_path[(before, after)] = tmp_dict
-        
-        # add the creation function (only one creation function)
-        _tmp = transition_code.replace("IDL_current_state", before)
-        _tmp = _tmp.replace("IDL_next_state", after)
-        s = ""
-        # then add each function along the rec_path
-        if ("rec_steps" in tmp_dict): 
-            for item in tmp_dict["rec_steps"]:
-                s = s + item[0]
-        _tmp = _tmp.replace("IDL_state_transition_call", s)
-        tmp = tmp + _tmp
+        #print(other_v["name"])
+        #print(back_edges)
+        _tmp = transition_code.replace("IDL_current_state", state_list[0])
+        _tmp = _tmp.replace("IDL_next_state", item)
+                
+        recfn_list = []
+        for _eidx in back_edges:
+            if (_eidx):                
+                for eid in _eidx:
+                    # condition 2: only add the function that has not reached the destination
+                    if (item == smg.vs(smg.es[eid].target)["name"][0]): 
+                        continue;
+                    #print(smg.es[eid]["func"].rsplit('(',1)[0])
+                    #print(IFcode[smg.es[eid]["func"].rsplit('(',1)[0]]["parameters"]["desc_params"])
+                    tmp_deslparams = IFcode[smg.es[eid]["func"].rsplit('(',1)[0]]["parameters"]["desc_params"]
+                    tmp_code = smg.es[eid]["func"]
+                    tmp_code = tmp_code.replace("IDL_desc_saved_params", tmp_deslparams)
+                    recfn_list.append(tmp_code)
+                        
+        if (recfn_list):
+            rec_path[(state_list[0], item)] = recfn_list
+            s = ""
+            for item in recfn_list:
+                s = s + item + ";\n"
+            _tmp = _tmp.replace("IDL_state_transition_call", s)           
+            rec_code = rec_code + _tmp
+
+    #subIFcode["parameters"]["desc_params"]
+    #pprint(IFcode)
+    #print(rec_code)
+    #exit()
     
     code = IFcode["internalfn"]
-    code = code.replace("IDL_state_transition;", tmp)
+    code = code.replace("IDL_state_transition;", rec_code)
     IFcode["internalfn"] = code
+
+#===============================================================================
+#     for edge in smg.es:
+#         tmp_dict = {}      
+#         if (edge["retcode"] == "faulty" or  
+#             smg.vs(edge.source)["name"][0] == "state_null"):
+#             continue
+#         else:
+#             before = smg.vs(edge.source)["name"][0]
+#             after  = smg.vs(edge.target)["name"][0] 
+#             
+#             # NOTE: this should be taken care by the BLOCK_CLI_IF_RECOVER
+#             # ********************************************************************
+#             # first: add the edge to the initial state (recreated by the creation)
+#             # ********************************************************************
+#             #rec_edge = smg.es.select(_source = edge.source, _target=creation_v.index)
+#             #tmp_dict["rec_init"] = (rec_edge["func"], creation_v["name"])
+#             #print(rec_edge["func"])
+# 
+#             # NOTE: this will any necessary edge (function) along the rec path. 
+#             #       if the creation can reach the target directly, this can be none 
+#             # ********************************************************************
+#             # second: check if there is a reachable path from the initial state
+#             #         back to the target state (the one failed to transit to)
+#             # ********************************************************************
+#             back_edges = smg.get_shortest_paths(creation_v.index, edge.target, 
+#                                                 mode = 'OUTPUT', output="epath")
+#             
+#             
+#             #print(edge.target)
+#             #print(back_edges)
+#             #print(smg.es[1]["func"])
+#             
+#             # does not include the last function call (will be done by "redo")
+#             back_edges.pop()
+#             
+#             for _eidx in back_edges:
+#                 if (_eidx):
+#                     recfn_list = []
+#                     for eid in _eidx:
+#                         recfn_list.append((smg.es[eid]["func"], 
+#                                            smg.vs(smg.es[eid].target)["name"][0]))
+#                     tmp_dict["rec_steps"] = recfn_list   # TODO: append these together
+#         
+#         # now we have all edges to rebuild the state for current state transition (this edge)            
+#         rec_path[(before, after)] = tmp_dict
+#===============================================================================
+    #===========================================================================
+    #     
+    #     # add the creation function (only one creation function)
+    #     _tmp = transition_code.replace("IDL_current_state", before)
+    #     _tmp = _tmp.replace("IDL_next_state", after)
+    #     s = ""
+    #     # then add each function along the rec_path
+    #     if ("rec_steps" in tmp_dict): 
+    #         for item in tmp_dict["rec_steps"]:
+    #             s = s + item[0]
+    #     _tmp = _tmp.replace("IDL_state_transition_call", s)
+    #     tmp = tmp + _tmp
+    # 
+    # exit()
+    #===========================================================================
 
 #=========================
 #
@@ -595,6 +715,7 @@ def construct_server_code(result, IFcode):
     final_id = IFcode["trackds"]["desc_id"][1]                                     
     IFresult["SERVER"]["block_func"] = {}
     IFresult["SERVER"]["wakeup_func"] = {}
+    
     for k, v in IFcode["server"]["server_code"].items():
         if ("IDL_block_fname" in v):  # block
             IFresult["SERVER"]["block_func"]["code"] = v
@@ -638,15 +759,45 @@ def construct_server_code(result, IFcode):
             
             # prepare for s_stub.S
             tmp = IFcode["s_stub.S"]
-            tmp.append(("client_fault_notification", "__ser_client_fault_notification"))
+            tmp.append((keywords.service_name + "_client_fault_notification",
+                        "__ser_" + keywords.service_name + "_client_fault_notification"))
             IFcode["s_stub.S"] = tmp
-            
+
+            #tmp = IFcode["server"]["server_code"]["BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION"]
+            #tmp = tmp.replace("IDL_service", keywords.service_name)
+            #IFcode["server"]["server_code"]["BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION"] = tmp
             #print(server_code)
-            #pprint(IFcode["server"])
+            #print(IFcode["s_stub.S"])
+            #pprint(IFcode["server"]["server_code"])
             #exit()
 
+    marshall_fn = ""
+    for fn in result.tuple[0].functions:
+        fname = fn.info["funcname"]
+        if (IFcode[fname]["marshall fn"]):
+            marshall_fn = marshall_fn + IFcode[fname]["marshall fn"]
+            marshall_fn = IFcode[fname]["marshall ds"] + marshall_fn
+            marshall_fn = marshall_fn.replace("IDL_fname", fname)
+            marshall_fn = marshall_fn.replace("IDL_fntype", fn.info["functype"])
+            
+    server_code = marshall_fn + server_code
+    server_code = server_code.replace("IDL_service", keywords.service_name)
     server_code = server_code.replace("IDL_id", final_id)
+    
+    # # on server side, we add "extern" for the final code
+    # if (keywords.final_output == True):     
+    #     extern_fn = ""
+    #     for fn in result.tuple[0].functions:
+    #         extern_fn = extern_fn + "extern " + fn.info["functype"] + " " + \
+    #                     fn.info["funcname"] + "(" + \
+    #                     IFcode[fn.info["funcname"]]["parameters"]["params_decl"] + ");\n"
 
+    #     server_code = extern_fn + server_code
+        
+    server_code = server_code.replace("IDL_TAKE", IFcode["lock_take_func"])
+    server_code = server_code.replace("IDL_RELEASE", IFcode["lock_release_func"])
+
+    #print(server_code)
     return server_code
 
 def construct_client_code(result, IFcode):
@@ -700,15 +851,21 @@ def construct_client_code(result, IFcode):
     if ("desc_parent id" in IFcode["trackds"]):
         final_parent_id = IFcode["trackds"]["desc_parent id"][1]
         result_code = result_code.replace("IDL_parent_id", final_parent_id)
-    
+
+    if (keywords.final_output == True):
+        result_code = result_code.replace("IDL_init_maps", keywords.init_map_str)
+    else:
+        result_code = result_code.replace("IDL_init_maps", "")
+
+    # for example, desc_maps now changes to ILD_service_desc_maps
+    result_code = result_code.replace("IDL_service", keywords.service_name)
     return result_code
 
 def construct_s_stub_code(result, IFcode):
-    result_code = """/**
- * IDL genereated
- *
- */
-#include <cos_asm_server_stub.h>
+    result_code = """
+/* How IDL know when to use simple stack or stack? */
+#include <cos_asm_server_stub_simple_stack.h>
+//#include <cos_asm_server_stub.h>
     
 .text
     """
@@ -725,6 +882,9 @@ def construct_s_stub_code(result, IFcode):
     return result_code
     
 def write_code_to_file(code, output_file):
+    if(write_to_file == 0):
+        return
+    
     # write out the result to the file (easier debug)    
     if (output_file[-1] != "c"):
         with open(output_file, "w") as text_file:
@@ -733,7 +893,7 @@ def write_code_to_file(code, output_file):
 
     #pprint(IFcode)
     #exit()
-    if (keywords.final_output == 0):    
+    if (keywords.final_output == False):    
         # make a fake main function for testing only        
         if (using_main):
             fake_main = r"""
@@ -745,39 +905,51 @@ def write_code_to_file(code, output_file):
     """
             code = code + "\n" + fake_main
         
-        code = r'''#include "cidl_gen.h"''' + "\n" + code 
-    
+        code = r'''#include "cidl_gen.h"''' + "\n" + code
+
+       
     with open("tmp.c", "w") as text_file:
         text_file.write("{0}".format(code))
     os.system("indent -linux tmp.c -o " + output_file)
     os.system("rm tmp.c")
 
-    if (keywords.final_output == 0): 
+    if (keywords.final_output == False): 
         # generate the new ast for the interface code (only for c file)
         parser = c_parser.CParser()
         ast = parse_file(output_file, use_cpp=True,
                          cpp_path='cpp',
                          cpp_args=r'-Iutils/fake_libc_include')    
         #ast.show()
-    
+
 def paste_idl_code(result, IFcode):
-    sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
-    if (keywords.final_output == 1):
+    
+    #sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
+    #sname = result.gvars["global_info"]["service_name"]
+    sname = keywords.service_name
+    #print(sname)
+    
+    if (keywords.final_output == True):
         sname = "final_" + sname
 
     # client side code
     client_code = construct_client_code(result, IFcode)
+    if (keywords.final_output == True):
+        client_code = keywords.add_c_header() + client_code
     write_code_to_file(client_code, "output/" + sname + "_c_stub.c")  
     
     # server side code
     server_code = construct_server_code(result, IFcode)
+    if (keywords.final_output == True):
+        server_code = keywords.add_s_header() + server_code
     write_code_to_file(server_code, "output/" + sname + "_s_cstub.c")
     
     # s_stub.S
     s_stub_code = construct_s_stub_code(result, IFcode)
+    header = "/* " + keywords.IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
+    s_stub_code = header + s_stub_code
     write_code_to_file(s_stub_code, "output/" + sname + "_s_stub.S")
     
-    print ("IDL process is done!!")
+    print ("\n<<<IDL process is done!!>>>")
 
 def idl_generate(result, parsed_ast):
     globaldescp, funcdescps, globalblocks, funcblocks, ser_funcblocks = ([] for i in range(5))
@@ -795,13 +967,14 @@ def idl_generate(result, parsed_ast):
     # exit()
     #===========================================================================
     keywords.read_from_template_code(IFcode)
+    
     IFDesc = (globaldescp, funcdescps)
     
     # build blocks and descriptions
     generate_description(result, funcdescps, globaldescp) 
     init_blocks(globalblocks, funcblocks, ser_funcblocks)
 
-    #pprint(IFDesc)
+    #pprint(globaldescp)
     #exit()
 
     # evaluate the conditions and generate block code
