@@ -24,6 +24,13 @@ all_lock: parse_lock compile_lock gen_lock cp_lock plot_lock
 
 all_ramfs: parse_ramfs compile_ramfs gen_ramfs cp_ramfs plot_ramfs
 
+
+all_bench: parse_all compile_all gen_all_bench cp_all
+
+all_lock_bench: parse_lock compile_lock gen_lock_bench cp_lock plot_lock
+
+all_ramfs_bench: parse_ramfs compile_ramfs gen_ramfs_bench cp_ramfs plot_ramfs
+
 ##############
 ## parsing
 ##############
@@ -61,6 +68,22 @@ compile_lock:
 	rm output/$(TMP_OUTPUT)
 
 ########################################################
+## generate the acutal interface code w/ ubenchmark
+########################################################
+gen_all_bench: gen_ramfs_bench gen_lock_bench
+	@echo
+
+gen_ramfs_bench:
+	@echo $(FINAL_CODE)
+	@echo "IDL process starting.... <<<"$(FS_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(FS_SERVICE).h bench
+
+gen_lock_bench:
+	@echo
+	@echo "IDL process starting.... <<<"$(LOCK_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(LOCK_SERVICE).h bench
+
+########################################################
 ## generate the acutal interface code for Composite
 ########################################################
 gen_all: gen_ramfs gen_lock
@@ -75,7 +98,6 @@ gen_lock:
 	@echo
 	@echo "IDL process starting.... <<<"$(LOCK_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(LOCK_SERVICE).h final
-
 
 ######################################################################
 ## copy the generated files to the Compoiste interface(symbolink further)

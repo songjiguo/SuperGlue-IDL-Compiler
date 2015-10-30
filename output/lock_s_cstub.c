@@ -14,7 +14,7 @@ static inline int block_ser_if_block_track_lock_component_take(spdid_t spdid,
 	struct track_block tb;	// track on stack
 
 	do {
-		if (sched_component_take(spdid))
+		if (sched_component_take(cos_spd_id()))
 			BUG();
 	} while (0);
 
@@ -26,21 +26,21 @@ static inline int block_ser_if_block_track_lock_component_take(spdid_t spdid,
 	ADD_LIST(&tracking_block_list[spdid], &tb, next, prev);
 
 	do {
-		if (sched_component_release(spdid))
+		if (sched_component_release(cos_spd_id()))
 			BUG();
 	} while (0);
 
 	ret = lock_component_take(spdid, lock_id, thd_id);
 
 	do {
-		if (sched_component_take(spdid))
+		if (sched_component_take(cos_spd_id()))
 			BUG();
 	} while (0);
 
 	REM_LIST(&tb, next, prev);
 
 	do {
-		if (sched_component_release(spdid))
+		if (sched_component_release(cos_spd_id()))
 			BUG();
 	} while (0);
 
@@ -58,7 +58,7 @@ static inline void block_ser_if_client_fault_notification(int spdid)
 	struct track_block *tb;
 
 	do {
-		if (sched_component_take(spdid))
+		if (sched_component_take(cos_spd_id()))
 			BUG();
 	} while (0);
 
@@ -72,21 +72,21 @@ static inline void block_ser_if_client_fault_notification(int spdid)
 	     tb = FIRST_LIST(tb, next, prev)) {
 
 		do {
-			if (sched_component_release(spdid))
+			if (sched_component_release(cos_spd_id()))
 				BUG();
 		} while (0);
 
 		lock_component_release(spdid, tb->lock_id);
 
 		do {
-			if (sched_component_take(spdid))
+			if (sched_component_take(cos_spd_id()))
 				BUG();
 		} while (0);
 	}
 
  done:
 	do {
-		if (sched_component_release(spdid))
+		if (sched_component_release(cos_spd_id()))
 			BUG();
 	} while (0);
 

@@ -21,6 +21,7 @@ service_name = ""
 header       = ""
 plot_graph   = False
 final_output = False
+bench = False
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
@@ -47,6 +48,11 @@ def plot_sm_graph():
 def final_code():
     global final_output
     final_output = True
+
+def bench_code():
+    global bench;
+    bench = True
+
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
@@ -462,6 +468,47 @@ extern void free_page(void *ptr);
 init_map_str = '''
 if (unlikely(!IDL_service_desc_maps.data.depth)) {
 cos_map_init_static(&IDL_service_desc_maps);
+}
+'''
+
+para_save_str = '''
+static char *
+param_save(char *param, int param_len)
+{
+        char *l_param;
+        
+        if (param_len <= 0) return NULL;
+        assert(param);
+        l_param = malloc(param_len);
+        assert(l_param);
+        strncpy(l_param, param, param_len);
+        l_param[param_len] = '\\0\';   // zero out any thing left after the end                                                                                                                  
+        return l_param;
+}
+'''
+
+benchmark_meas_start = '''
+IDL_fname_ubenchmark_flag = 1;
+rdtscll(ubenchmark_start);
+'''
+benchmark_meas_end = '''
+rdtscll(ubenchmark_end);
+if (IDL_fname_ubenchmark_flag) {
+    IDL_fname_ubenchmark_flag = 0;
+    printc(\"IDL_fname:recover per object end-end cost: %llu\\n", ubenchmark_end - ubenchmark_start);
+    }
+'''
+benchmark_vars = '''
+volatile unsigned long long ubenchmark_start, ubenchmark_end;
+'''
+
+ser_treadp_str='''
+int
+__ser_treadp(spdid_t spdid, int tid, int len, int __pad0, int *off_len)
+{  
+        int ret = 0;
+        ret = treadp(spdid, tid, len, &off_len[0], &off_len[1]);  
+        return ret;
 }
 '''
 

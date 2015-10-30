@@ -303,7 +303,11 @@ if __name__ == "__main__":
 
     if (len(sys.argv) == 3 and sys.argv[2] == "final"):
         keywords.final_code()
-    
+
+    if (len(sys.argv) == 3 and sys.argv[2] == "bench"):
+        keywords.final_code()
+        keywords.bench_code()
+
     os.system("gcc -E " + filename +" -o cidl_pre");
     #os.system("cat cidl_pre");
     

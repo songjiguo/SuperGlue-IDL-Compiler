@@ -42,6 +42,7 @@ int tmp;
 #define cslab_alloc_rdservice() 0
 
 #define CSTUB_INVOKE
+#define CSTUB_INVOKE_3RETS
 #define CSTUB_FAULT_UPDATE()
 
 #define MAX_NUM_SPDS 64
@@ -99,7 +100,11 @@ int lock_component_release(){}
 int sched_component_take(){}
 int sched_component_release(){}
 #define BUG(); {;}
+#define EINVAL 0
+
+int cos_spd_id(){}
 
 int cbuf2buf(){}
+#include <string.h>
 
 #endif /* _cos_fake_header_h */

@@ -18,13 +18,15 @@ import c3_parser
 
 using_main = 1
 max_params = 4  # up to 4 parameters in Composite
-write_to_file = 1
+write_to_file = 1  # simply for testing only, no write files
 
 # transparent to the user (used internally, so no need to dynamically change)
 desc_track_server_id = "int IDL_server_id"
 desc_track_fault_cnt = "unsigned long long fault_cnt"
 desc_track_state = "unsigned int state"
 desc_track_next_state = "unsigned int next_state"
+
+marshalling_flag = False
 
 class MyCode():
     def __init__(self):
@@ -137,27 +139,6 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
     
     return code        
 
-# initial creation -- starting point in SM transition, treat this specially            
-def init_creation(fdesc, subIFcode, IFcode):
-    code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
-    code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
-    code = code.replace("IDL_fname", fdesc[0])
-    IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code 
-    
-    code = subIFcode["cstub_fn"]
-    code = code.replace("IDL_id", "")
-    subIFcode["cstub_fn"] = code
-    
-    # desc_cons
-    code = IFcode["internalfn"]
-    tmp = ""
-    for f, b in zip(subIFcode["parameters"]["desc_params"].split(","), 
-                    subIFcode["parameters"]["params"].split(",")):
-        tmp = tmp + f + "=" + b + ";\n"
-    code = code.replace("IDL_parsdecl", subIFcode["parameters"]["params_decl"])
-    code = code.replace("IDL_desc_cons;", tmp)
-    IFcode["internalfn"] = code
-
 def generate_globalvas(result, IFcode):
     IFcode["s_stub.S"] = []
     keywords.get_lock_function(IFcode, keywords.service_name)
@@ -238,27 +219,83 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
     for k, v in result.tuple[0].ser_block_track.iteritems():
             IFcode["server"][k] = v    
 
+# initial creation -- starting point in SM transition, treat this specially            
+def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
+    code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
+    code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
+    code = code.replace("IDL_fname", fdesc[0])
+    IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code 
+    
+    code = subIFcode["cstub_fn"]
+    code = code.replace("IDL_id", "")
+    subIFcode["cstub_fn"] = code
+    
+    # desc_cons
+    code = IFcode["internalfn"]
+    tmp = ""
+    for f, b in zip(subIFcode["parameters"]["desc_params"].split(","), 
+                    subIFcode["parameters"]["params"].split(", ")):
+        if (marshall_cp and b == marshall_cp[0]):
+            tmp = tmp + f + "=" + "param_save("+ marshall_cp[0] + ", " + \
+                  marshall_cp[1] +");"+ ";\n"
+            continue
+        tmp = tmp + f + "=" + b + ";\n"
+    # treat the marshalled params differently (save parameterusing maloc)  
+    # assume only one data being passed per invocation  
+    # if (marshall_cp):
+    #     tmp = tmp + "param_save("+ marshall_cp[0] + ", " + marshall_cp[1] +");"
+        
+    code = code.replace("IDL_parsdecl", subIFcode["parameters"]["params_decl"])
+    code = code.replace("IDL_desc_cons;", tmp)
+    IFcode["internalfn"] = code
+
+def bench_mark(code, fname):
+    if (keywords.bench == False):
+        keywords.benchmark_meas_start = ""
+        keywords.benchmark_meas_end = ""
+    else:
+        code = "static int IDL_fname_ubenchmark_flag;\n" + code
+        
+    code = code.replace("IDL_benchmark_start", keywords.benchmark_meas_start)
+    code = code.replace("IDL_benchmark_end", keywords.benchmark_meas_end)
+    code = code.replace("IDL_fname", fname)
+
+    return code
+
 # marshall the parameter list (using cbuf), if 2 conditions are met
 # 1) more than 4 parameters (Composite passes up to 4 parameters)
 # 2) passing pointer, and which is not "__retval" type
+# 3) more than 1 return val
 def marshalling(result, fdesc, subIFcode, IFcode):
+    global marshalling_flag
+    subIFcode["marshall fn"] = []
+    marshall_cp = []
     param_list = subIFcode["parameters"]["params"].split(",")
     paramdecl_list = subIFcode["parameters"]["params_decl"].split(", ")
 
     cond_1 = (len(param_list) > max_params)
     cond_2 = ("*" in ', '.join(paramdecl_list))
-    if (cond_2):
-        num = len(param_list)
-        for item in paramdecl_list:
-            if ("*" not in item or "_retval" in item):
-                num -= 1
-        cond_2 *= num  # if there is any pointer to pass, and not __retval, set num must be none 0
-        
+    cond_3 = False
+    ret_num = 0
+    for item in paramdecl_list:
+        if ("*" in item and "_retval" in item):
+            ret_num += 1
+            cond_3 = 1  # need treat this differently (multiple rets)
+    #===========================================================================
+    # if (cond_2):
+    #     num = len(param_list)
+    #     for item in paramdecl_list:
+    #         if ("*" not in item or "_retval" in item):
+    #             num -= 1
+    #     cond_2 *= num  # if there is any pointer to pass, and not __retval, set num must be none 0
+    #===========================================================================
+    
     # when either condition is met, we do the marshalling here
-    if (cond_1 and cond_2):
+    if ((cond_1 or cond_2) and not cond_3):
         #print(param_list)
         #print(paramdecl_list)
         #print(fdesc[0])
+        marshalling_flag = True
         
         tmp_cons = ""
         tmp_decl = ""
@@ -268,13 +305,19 @@ def marshalling(result, fdesc, subIFcode, IFcode):
             tmp_cons = tmp_cons + "md->"+item.split(" ")[1]+ " = "+ item.split(" ")[1] + ";\n"
             tmp_decl = tmp_decl + item + ";\n"
         marshalling_parsdecl = tmp_decl[:-2] # remove the last ";"
-        marshalling_cons     = tmp_cons[:-2] 
+        marshalling_cons     = tmp_cons[:-2]
         
         len_var = ""
         if ("size_of" in list(traverse(fdesc))) :
-            len_idx = list(traverse(fdesc)).index("size_of") + 3
+            tmp_idx = list(traverse(fdesc)).index("size_of")
+            data_idx = tmp_idx + 1
+            len_idx = tmp_idx + 3
             len_var = list(traverse(fdesc))[len_idx]
-        
+            marshall_cp = [list(traverse(fdesc))[data_idx], list(traverse(fdesc))[len_idx]]
+            ## this is the data copy before passing by cbuf
+            marshalling_cons = marshalling_cons + ";\nmemcpy(&md->data[0], " + marshall_cp[0] + ", " + \
+                                           marshall_cp[1] + " + 1)";
+
         marshalling_ds   = IFcode["marshalling ds"]["code"]
         marshalling_ds = marshalling_ds.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
         
@@ -334,11 +377,29 @@ def marshalling(result, fdesc, subIFcode, IFcode):
     # marshalling
     subIFcode["cstub_fn"] = replace_params(result, fdesc, cstub_code, IFcode, 
                                            subIFcode, param_list, paramdecl_list)
-    subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = replace_params(result, fdesc, inkcode, IFcode, 
+
+    # for benchmark only
+    subIFcode["cstub_fn"] = bench_mark(subIFcode["cstub_fn"], fdesc[0])
+    
+    subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = replace_params(result, fdesc, inkcode, IFcode,
                                                  subIFcode, param_list, paramdecl_list)
     subIFcode["marshall ds"] = replace_params(result, fdesc, marshalling_ds, IFcode, 
                                                  subIFcode, param_list, paramdecl_list)
-            
+    if (fdesc[2] == "creation"):
+        init_creation(fdesc, subIFcode, IFcode, marshall_cp)
+        
+    # for simplicty, manually change here for 3 rets!!!!
+    if (cond_3):
+        tmp = IFcode["s_stub.S"]
+        tmp.append((fdesc[0], "__ser_"+fdesc[0]))
+        IFcode["s_stub.S"] = tmp
+        
+        tmp = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
+        tmp = tmp.replace("CSTUB_INVOKE(ret, __fault, uc, 5, spdid, desc->server_tid, len, _retval_cbuf_off, _retval_sz);",
+                          "CSTUB_INVOKE_3RETS(ret, __fault, *_retval_cbuf_off, *_retval_sz, uc, 3, spdid, desc->server_tid, len); ")
+        subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = tmp
+    #print(subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"])        
+
 def generate_fblocks(result, funcblocks, IFDesc, IFcode):
     #no_match_code_list = []
     
@@ -381,11 +442,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
         code = "IDL_fname(IDL_desc_saved_params)" # add this function to the edge later
         subIFcode["state"]["state_fn"] = replace_params(result, fdesc, code, IFcode, 
                                                         subIFcode, param_list, paramdecl_list)
-        subIFcode["marshall fn"] = []
         marshalling(result, fdesc, subIFcode, IFcode)
-
-        if (fdesc[2] == "creation"):
-            init_creation(fdesc, subIFcode, IFcode)
 
         IFcode[fdesc[0]] = subIFcode
         
@@ -797,6 +854,10 @@ def construct_server_code(result, IFcode):
     server_code = server_code.replace("IDL_TAKE", IFcode["lock_take_func"])
     server_code = server_code.replace("IDL_RELEASE", IFcode["lock_release_func"])
 
+    # hard code
+    if (keywords.service_name == "ramfs"):
+        server_code = keywords.ser_treadp_str + server_code
+    
     #print(server_code)
     return server_code
 
@@ -859,6 +920,10 @@ def construct_client_code(result, IFcode):
 
     # for example, desc_maps now changes to ILD_service_desc_maps
     result_code = result_code.replace("IDL_service", keywords.service_name)
+
+    if (marshalling_flag == True):
+        result_code = keywords.para_save_str + result_code
+    
     return result_code
 
 def construct_s_stub_code(result, IFcode):
@@ -933,6 +998,8 @@ def paste_idl_code(result, IFcode):
 
     # client side code
     client_code = construct_client_code(result, IFcode)
+    if (keywords.bench == True):
+        client_code = keywords.benchmark_vars + client_code
     if (keywords.final_output == True):
         client_code = keywords.add_c_header() + client_code
     write_code_to_file(client_code, "output/" + sname + "_c_stub.c")  

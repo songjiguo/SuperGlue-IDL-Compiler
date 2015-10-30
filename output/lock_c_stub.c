@@ -95,7 +95,7 @@ static inline struct desc_track *call_desc_alloc()
 		map_id = cos_map_add(&lock_desc_maps, desc);
 		desc->lock_id = map_id;
 		desc->server_lock_id = -1;	// reset to -1
-		if (map_id >= 1)
+		if (map_id >= 2)
 			break;
 	}
 	assert(desc && desc->lock_id >= 1);
@@ -119,7 +119,10 @@ static inline void call_desc_cons(struct desc_track *desc, int id,
 	assert(desc);
 
 	desc->server_lock_id = id;
+
 	desc->spdid = spdid;
+
+	desc->fault_cnt = global_fault_cnt;
 
 	return;
 }
@@ -320,6 +323,10 @@ static inline int block_cli_if_invoke_lock_component_take(spdid_t spdid,
 static inline int block_cli_if_track_lock_component_alloc(int ret,
 							  spdid_t spdid)
 {
+	// if ret does not exist, just return as it is, thinking....
+	if (ret == -EINVAL)
+		return ret;
+
 	struct desc_track *desc = call_desc_alloc();
 	assert(desc);
 	call_desc_cons(desc, ret, spdid);
@@ -381,10 +388,12 @@ CSTUB_FN(int, lock_component_pretake)(struct usr_inv_cap * uc, spdid_t spdid,
 
  redo:
 	block_cli_if_desc_update_lock_component_pretake(lock_id);
+
 	ret =
 	    block_cli_if_invoke_lock_component_pretake(spdid, lock_id, thd_id,
 						       ret, &fault, uc);
 	if (unlikely(fault)) {
+
 		CSTUB_FAULT_UPDATE();
 		goto redo;
 	}
@@ -401,12 +410,15 @@ CSTUB_FN(int, lock_component_release)(struct usr_inv_cap * uc, spdid_t spdid,
 	int ret = 0;
 
 	block_cli_if_desc_update_lock_component_release(lock_id);
+
 	ret =
 	    block_cli_if_invoke_lock_component_release(spdid, lock_id, ret,
 						       &fault, uc);
 	if (unlikely(fault)) {
+
 		CSTUB_FAULT_UPDATE();
 		block_cli_if_desc_update_lock_component_release(lock_id);
+
 	}
 	ret = block_cli_if_track_lock_component_release(ret, spdid, lock_id);
 
@@ -419,12 +431,15 @@ CSTUB_FN(int, lock_component_take)(struct usr_inv_cap * uc, spdid_t spdid,
 	int ret = 0;
 
 	block_cli_if_desc_update_lock_component_take(lock_id);
+
 	ret =
 	    block_cli_if_invoke_lock_component_take(spdid, lock_id, thd_id, ret,
 						    &fault, uc);
 	if (unlikely(fault)) {
+
 		CSTUB_FAULT_UPDATE();
 		block_cli_if_desc_update_lock_component_take(lock_id);
+
 	}
 	ret =
 	    block_cli_if_track_lock_component_take(ret, spdid, lock_id, thd_id);
@@ -438,8 +453,10 @@ CSTUB_FN(ul_t, lock_component_alloc) (struct usr_inv_cap * uc, spdid_t spdid) {
 
  redo:
 	block_cli_if_desc_update_lock_component_alloc();
+
 	ret = block_cli_if_invoke_lock_component_alloc(spdid, ret, &fault, uc);
 	if (unlikely(fault)) {
+
 		CSTUB_FAULT_UPDATE();
 		goto redo;
 	}
@@ -455,10 +472,12 @@ CSTUB_FN(int, lock_component_free)(struct usr_inv_cap * uc, spdid_t spdid,
 
  redo:
 	block_cli_if_desc_update_lock_component_free(lock_id);
+
 	ret =
 	    block_cli_if_invoke_lock_component_free(spdid, lock_id, ret, &fault,
 						    uc);
 	if (unlikely(fault)) {
+
 		CSTUB_FAULT_UPDATE();
 		goto redo;
 	}

@@ -34,7 +34,7 @@ creation
 // block_cli_if_invoke 1 start
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	struct desc_track *parent_desc = NULL;
-	if ((parent_desc = call_desc_lookup(IDL_parent_id))) {
+	if ((IDL_parent_id > 1) && (parent_desc = call_desc_lookup(IDL_parent_id))) {
 		IDL_parent_id = parent_desc->IDL_server_id;
 	} /* else {  	// td_root, or in a different component */
 	/* 	IDL_parent_id = IDL_parent_id; */
@@ -187,19 +187,18 @@ static inline void block_cli_if_basic_id(int id) {
 	assert(desc);
 	
 	int retval = 0;
+again:
 	retval = IDL_fname(IDL_desc_saved_params);
-
 	//TODO: define the error code for non-recovered parent
-	if (retval == -99) {
+	// thinking...
+	if (retval == -EINVAL) {
 		id = desc->IDL_parent_id;
-		//block_cli_if_recover(id);
 		call_desc_update(id, state_IDL_fname);
-	} else {
-		assert(retval);
-		desc->IDL_server_id = retval;
-		desc->state = IDL_init_state;
-	}
-	
+		goto again;
+	} 
+
+	assert(retval);
+	desc->state = IDL_init_state;
 	block_cli_if_recover_data(desc);
 }
 // block_cli_if_basic_id 1 end
@@ -297,6 +296,9 @@ creation
 // block_cli_if_track pred 1 end
 // block_cli_if_track 1 start
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	// if ret does not exist, just return as it is, thinking....
+	if (ret == -EINVAL) return ret;
+
 	struct desc_track *desc = call_desc_alloc();
 	assert(desc);
 	call_desc_cons(desc, ret, IDL_params);
@@ -452,7 +454,7 @@ static inline struct desc_track *call_desc_alloc() {
 		map_id = cos_map_add(&IDL_service_desc_maps, desc);
 		desc->IDL_id        = map_id;
 		desc->IDL_server_id = -1;  // reset to -1
-		if (map_id >= 1) break;
+		if (map_id >= 2) break;
 	}
 	assert(desc && desc->IDL_id >= 1);
 	return desc;	
@@ -472,7 +474,11 @@ static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl)
 	assert(desc);
 
 	desc->IDL_server_id = id;
+
 	IDL_desc_cons;
+
+	desc->fault_cnt = global_fault_cnt;
+
 	return;
 }
 
@@ -545,11 +551,16 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	int ret = 0;
 	
 	IDL_init_maps
-
 redo:
 	block_cli_if_desc_update_IDL_fname(IDL_id);
+
+	IDL_benchmark_end
+
 	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc); 
         if (unlikely (fault)){
+
+		IDL_benchmark_start
+
 		CSTUB_FAULT_UPDATE();
                 goto redo;
         }
@@ -567,10 +578,16 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	IDL_init_maps
 
 	block_cli_if_desc_update_IDL_fname(IDL_id);
+
 	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc); 
         if (unlikely (fault)){
+
+		IDL_benchmark_start
+
 		CSTUB_FAULT_UPDATE();
 		block_cli_if_desc_update_IDL_fname(IDL_id);		
+
+		IDL_benchmark_end
         }
 	ret = block_cli_if_track_IDL_fname(ret, IDL_params);
  
@@ -713,15 +730,21 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
         struct __ser_IDL_fname_marshalling *md = NULL;
 	cbuf_t cb = 0;
 	int sz  = IDL_data_len + sizeof(struct __ser_IDL_fname_marshalling);
+
 redo:
 	block_cli_if_desc_update_IDL_fname(IDL_id);
 
         md = (struct __ser_IDL_fname_marshalling *)cbuf_alloc(sz, &cb);
 	assert(md);  // assume we always get cbuf for now
 
+	IDL_benchmark_end
+
 	ret = block_cli_if_marshalling_invoke_IDL_fname(IDL_params, ret, &fault, uc, md, sz, cb);
 
         if (unlikely (fault)){
+
+		IDL_benchmark_start
+
 		CSTUB_FAULT_UPDATE();
 		cbuf_free(cb);
                 goto redo;
@@ -744,12 +767,13 @@ creation
 // block_cli_if_marshalling_invoke 1 start
 static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz, cbuf_t cb) {
 	struct desc_track *parent_desc = NULL;
-	if ((parent_desc = call_desc_lookup(IDL_parent_id))) {
+	// thinking....
+	if ((IDL_parent_id > 1) && (parent_desc = call_desc_lookup(IDL_parent_id))) {
 		IDL_parent_id = parent_desc->IDL_server_id;
 	}
 
 	IDL_marshalling_cons;
-
+	
 	long __fault = 0;
 	CSTUB_INVOKE(ret, __fault, uc, 3, IDL_from_spd, cb, sz);
 	*fault = __fault;
