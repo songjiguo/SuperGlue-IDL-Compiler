@@ -77,6 +77,8 @@ def parse_decl_info(node):
     elif (ret[0] == "terminal"):
         result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
         #print()
+    elif (ret[0] == "block" or ret[0] == "wakeup"):
+        result.tuple[-1].ser_block_track[ret[0]]  = ret[1]
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
@@ -154,19 +156,11 @@ def construct_desc_fields(fname, field_str):
     desc_add_str    = "desc_data_add"
     desc_sizeof     = "size_of"
     desc_retval     = "desc_data_retval"
-    ser_block_str   = "server_block"
-    ser_wakeup_str  = "server_wakeup"
     #print(field_str)
     if (desc_str in field_str and pdesc_str in field_str):
         idx = field_str.index(pdesc_str)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
         result.gvars["parent id"] =  [field_str[idx+1],field_str[idx+2]]
-    elif (ser_block_str in field_str):
-        idx = field_str.index(ser_block_str)
-        result.tuple[-1].ser_block_track[ser_block_str]  = [fname, field_str[idx+2]]
-    elif (ser_wakeup_str in field_str):
-        idx = field_str.index(ser_wakeup_str)
-        result.tuple[-1].ser_block_track[ser_wakeup_str]  = [fname, field_str[idx+2]]
     elif (desc_str in field_str and desc_sizeof in field_str):
         idx = field_str.index(desc_sizeof)
         result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])         
@@ -295,7 +289,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_ramfs.h'
+        filename = 'input/cidl_evt.h'
     
     keywords.init_service_name(filename)    
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
@@ -343,7 +337,7 @@ if __name__ == "__main__":
     # pprint (result.tuple[0].functions[3].info)
     # print("")
     #===========================================================================
-    # exit()
+    #exit()
   
     c3_gen.idl_generate(result, ast)
     

@@ -68,10 +68,8 @@ struct usr_inv_cap {int a;};
 #define sm_creation(x)      void SM_creation_SM_##x
 #define sm_terminal(x)      void SM_terminal_SM_##x
 #define sm_transition(x, y) void SM_transition_SM_##x##_SM_##y
-
-#define sm_block(x)      server_block_CD_##x
-#define sm_wakeup(x)     server_wakeup_CD_##x
-#define sm_block_self(x) server_blockself_CD_##x
+#define sm_block(x)         void SM_block_SM_##x
+#define sm_wakeup(x)        void SM_wakeup_SM_##x
 
 /* need the second layer of indirection here .... when there is ## in x*/
 #define __desc_data_hidden(x)  CD_desc_data_CD_##x

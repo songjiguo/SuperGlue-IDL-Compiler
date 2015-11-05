@@ -1,34 +1,152 @@
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-/* client interface   */
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
+/*   ___| (_) ___ _ __ | |_  (_)_ __ | |_ ___ _ __ / _| __ _  ___ ___  */
+/*  / __| | |/ _ \ '_ \| __| | | '_ \| __/ _ \ '__| |_ / _` |/ __/ _ \ */
+/* | (__| | |  __/ | | | |_  | | | | | ||  __/ |  |  _| (_| | (_|  __/ */
+/*  \___|_|_|\___|_| |_|\__| |_|_| |_|\__\___|_|  |_|  \__,_|\___\___| */
+
+// client sm start 
+enum state_codes { IDL_state_list };
+// client sm end
 
 // client track start
 struct IDL_desc_track
 
 static volatile unsigned long global_fault_cnt = 0;
 
-/* tracking thread state for data recovery */
-//CVECT_CREATE_STATIC(rd_vect);
-COS_MAP_CREATE_STATIC(IDL_service_desc_maps);
-CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
-
+static int first_map_init = 0;
 // client track end
 
-// client sm start 
-enum state_codes { IDL_state_list };
-// client sm end
+/*****************************/
+/* client block_cli_if_tracking_map_ds */
+/*****************************/
+// Note:
+// cvect knows id then return desc, id conversion is done at the client interface
+// cosmap returns id for a desc, for the global case, id conversion is done through 3rd party spd
+
+// block_cli_if_tracking_map_ds pred 1 start
+desc_global_false
+// block_cli_if_tracking_map_ds pred 1 end
+// block_cli_if_tracking_map_ds 1 start
+COS_MAP_CREATE_STATIC(IDL_service_desc_maps);
+CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
+// block_cli_if_tracking_map_ds 1 end
+
+// block_cli_if_tracking_map_ds pred 2 start
+desc_global_true
+// block_cli_if_tracking_map_ds pred 2 end
+// block_cli_if_tracking_map_ds 2 start
+CVECT_CREATE_STATIC(IDL_service_desc_maps);
+CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
+// block_cli_if_tracking_map_ds 2 end
+
+// block_cli_if_tracking_map_ds no match start
+// block_cli_if_tracking_map_ds no match end
+
+/*****************************/
+/* client block_cli_if_map_init */
+/*****************************/
+// block_cli_if_map_init pred 1 start
+desc_global_false
+// block_cli_if_map_init pred 1 end
+// block_cli_if_map_init 1 start
+static inline void call_map_init() {
+	if (unlikely(!first_map_init)) {
+		first_map_init = 1;
+		cos_map_init_static(&IDL_service_desc_maps);
+	}
+	return;
+}
+// block_cli_if_map_init 1 end
+
+// block_cli_if_map_init pred 2 start
+desc_global_true
+// block_cli_if_map_init pred 2 end
+// block_cli_if_map_init 2 start
+static inline void call_map_init() {
+	if (unlikely(!first_map_init)) {
+		first_map_init = 1;
+		cvect_init_static(&IDL_service_desc_maps);
+	}
+	return;
+}
+// block_cli_if_map_init 2 end
+
+// block_cli_if_map_init no match start
+static inline void call_map_init() {
+}
+// block_cli_if_map_init no match end
+
+/********************************************/
+/* client block_cli_if_tracking_map_fn */
+/********************************************/
+// block_cli_if_tracking_map_fn pred 1 start
+desc_global_false
+// block_cli_if_tracking_map_fn pred 1 end
+// block_cli_if_tracking_map_fn 1 start
+static inline struct desc_track *call_desc_lookup(int id) {
+	 return (struct desc_track *)cos_map_lookup(&IDL_service_desc_maps, id);
+}
+
+static inline struct desc_track *call_desc_alloc() {
+	struct desc_track *desc = NULL;
+	int map_id = 0;
+
+	while(1) {
+		desc = cslab_alloc_IDL_service_slab();
+		assert(desc);	
+		map_id = cos_map_add(&IDL_service_desc_maps, desc);
+		desc->IDL_id        = map_id;
+		desc->IDL_server_id = -1;  // reset to -1
+		if (map_id >= 2) break;
+	}
+	assert(desc && desc->IDL_id >= 1);
+	return desc;	
+}
+
+static inline void call_desc_dealloc(struct desc_track *desc) {
+	assert(desc);
+	int id = desc->IDL_id;
+	desc->IDL_server_id = -1;  // reset to -1
+	assert(desc);
+	cslab_free_IDL_service_slab(desc);
+	cos_map_del(&IDL_service_desc_maps, id);
+	return;
+}
+// block_cli_if_tracking_map_fn 1 end
+
+// block_cli_if_tracking_map_fn pred 2 start
+desc_global_true
+// block_cli_if_tracking_map_fn pred 2 end
+// block_cli_if_tracking_map_fn 2 start
+static inline struct desc_track *call_desc_lookup(int id) {
+	 return (struct desc_track *)cvect_lookup(&IDL_service_desc_maps, id);
+}
+
+static inline struct desc_track *call_desc_alloc(int id) {
+	struct desc_track *desc = NULL;
+	desc = cslab_alloc_IDL_service_slab();
+	assert(desc);
+	desc->IDL_id  = id;
+	cvect_add(&IDL_service_desc_maps, desc, id);
+	return desc;
+}
+
+static inline void call_desc_dealloc(struct desc_track *desc) {
+	assert(desc);
+	if (cvect_del(&IDL_service_desc_maps, desc->IDL_id)) assert(0);
+	cslab_free_IDL_service_slab(desc);
+	return;
+}
+// block_cli_if_tracking_map_fn 2 end
+
+// block_cli_if_tracking_map_fn no match start
+// block_cli_if_tracking_map_fn no match end
 
 /*****************************/
 /* client block_cli_if_invoke */
 /* Note: the block with IDL is related to the function */
 /*****************************/
-
 // block_cli_if_invoke pred 1 start
-desc_dep_create_same|desc_dep_create_diff
+desc_dep_create_same
 creation
 // block_cli_if_invoke pred 1 end
 // block_cli_if_invoke 1 start
@@ -48,25 +166,47 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 }
 // block_cli_if_invoke 1 end
 
+
 // block_cli_if_invoke pred 2 start
-desc_dep_create_single
+desc_dep_create_diff
 creation
 // block_cli_if_invoke pred 2 end
 // block_cli_if_invoke 2 start
+static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
+	struct desc_track *parent_desc = NULL;
+	if ((IDL_parent_id > 1) && (parent_desc = call_desc_lookup(IDL_parent_id))) {
+		IDL_parent_id = parent_desc->IDL_server_id;
+	} /* else {  	// td_root, or in a different component */
+	/* 	IDL_parent_id = IDL_parent_id; */
+	/* } */
+
+	long __fault = 0;
+	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
+	*fault = __fault;
+
+	return ret;
+}
+// block_cli_if_invoke 2 end
+
+// block_cli_if_invoke pred 3 start
+desc_dep_create_single
+creation
+// block_cli_if_invoke pred 3 end
+// block_cli_if_invoke 3 start
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	long __fault = 0;
 	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
 	*fault = __fault;
 	return ret;
 }
-// block_cli_if_invoke 2 end
+// block_cli_if_invoke 3 end
 
-// block_cli_if_invoke pred 3 start
+// block_cli_if_invoke pred 4 start
 desc_global_true
 transition|terminal
-// block_cli_if_invoke pred 3 end
-// block_cli_if_invoke 3 start
-static inline ret block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
+// block_cli_if_invoke pred 4 end
+// block_cli_if_invoke 4 start
+static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	long __fault = 0;
 	if (desc) {  // might be created in the same component
@@ -83,13 +223,13 @@ static inline ret block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 
 	return ret;
 }
-// block_cli_if_invoke 3 end
+// block_cli_if_invoke 4 end
 
-// block_cli_if_invoke pred 4 start
+// block_cli_if_invoke pred 5 start
 desc_global_false
 transition|terminal
-// block_cli_if_invoke pred 4 end
-// block_cli_if_invoke 4 start
+// block_cli_if_invoke pred 5 end
+// block_cli_if_invoke 5 start
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	assert(desc);  // must be created in the same component
@@ -100,7 +240,7 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 
 	return ret;
 }
-// block_cli_if_invoke 4 end
+// block_cli_if_invoke 5 end
 
 // block_cli_if_invoke no match start
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
@@ -108,33 +248,104 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 // block_cli_if_invoke no match end
 
 /*****************************/
-/* client block_cli_if_desc_update */
+/* client block_cli_if_desc_update_pre */
 /*****************************/
+// block_cli_if_desc_update_pre pred 1 start
+desc_dep_create_single
+creation
+// block_cli_if_desc_update_pre pred 1 end
+// block_cli_if_desc_update_pre 1 start
+static inline void block_cli_if_desc_update_pre_IDL_fname() {
+}
+// block_cli_if_desc_update_pre 1 end
 
-// block_cli_if_desc_update pred 1 start
-transition|terminal
-// block_cli_if_desc_update pred 1 end
 
-// block_cli_if_desc_update 1 start
-static inline void block_cli_if_desc_update_IDL_fname(int id) {
+// block_cli_if_desc_update_pre pred 2 start
+desc_dep_create_same|desc_dep_create_diff
+creation
+// block_cli_if_desc_update_pre pred 2 end
+// block_cli_if_desc_update_pre 2 start
+static inline void block_cli_if_desc_update_pre_IDL_fname(int id) {
 	call_desc_update(id, state_IDL_fname);
 }
-// block_cli_if_desc_update 1 end
+// block_cli_if_desc_update_pre 2 end
 
-// block_cli_if_desc_update pred 2 start
-creation
-// block_cli_if_desc_update pred 2 end
 
-// block_cli_if_desc_update 2 start
-static inline void block_cli_if_desc_update_IDL_fname() {
+// block_cli_if_desc_update_pre pred 3 start
+desc_global_false
+transition|terminal
+// block_cli_if_desc_update_pre pred 3 end
+// block_cli_if_desc_update_pre 3 start
+static inline void block_cli_if_desc_update_pre_IDL_fname(int id) {
+	call_desc_update(id, state_IDL_fname);
 }
-// block_cli_if_desc_update 2 end
+// block_cli_if_desc_update_pre 3 end
 
-// block_cli_if_desc_update no match start
-static inline block_cli_if_desc_update_IDL_fname(int id) {
+
+// block_cli_if_desc_update_pre pred 4 start
+desc_global_true
+transition
+// block_cli_if_desc_update_pre pred 4 end
+// block_cli_if_desc_update_pre 4 start
+static inline void block_cli_if_desc_update_pre_IDL_fname() {
 }
-// block_cli_if_desc_update no match end
+// block_cli_if_desc_update_pre 4 end
 
+// block_cli_if_desc_update_pre pred 5 start
+terminal
+// block_cli_if_desc_update_pre pred 5 end
+// block_cli_if_desc_update_pre 5 start
+static inline void block_cli_if_desc_update_pre_IDL_fname(int id) {
+	call_desc_update(id, state_IDL_fname);
+}
+// block_cli_if_desc_update_pre 5 end
+
+
+// block_cli_if_desc_update_pre no match start
+static inline block_cli_if_desc_update_pre_IDL_fname(int id) {
+}
+// block_cli_if_desc_update_pre no match end
+
+
+/*****************************/
+/* client block_cli_if_desc_update_post_fault */
+/*****************************/
+// block_cli_if_desc_update_post_fault pred 1 start
+creation|terminal
+// block_cli_if_desc_update_post_fault pred 1 end
+// block_cli_if_desc_update_post_fault 1 start
+static inline int block_cli_if_desc_update_post_fault_IDL_fname(int id) {
+	return 1;
+}
+// block_cli_if_desc_update_post_fault 1 end
+
+// block_cli_if_desc_update_post_fault pred 2 start
+desc_global_false
+transition|terminal
+// block_cli_if_desc_update_post_fault pred 2 end
+// block_cli_if_desc_update_post_fault 2 start
+static inline int block_cli_if_desc_update_post_fault_IDL_fname(int id) {
+	return 1;
+	
+}
+// block_cli_if_desc_update_post_fault 2 end
+
+
+// block_cli_if_desc_update_post_fault pred 3 start
+desc_global_true
+transition
+// block_cli_if_desc_update_post_fault pred 3 end
+// block_cli_if_desc_update_post_fault 3 start
+static inline int block_cli_if_desc_update_post_fault_IDL_fname(int id) {
+	call_desc_update(id, state_IDL_fname);
+	return 0;
+}
+// block_cli_if_desc_update_post_fault 3 end
+
+// block_cli_if_desc_update_post_fault no match start
+static inline int block_cli_if_desc_update_post_fault_IDL_fname(int id) {
+}
+// block_cli_if_desc_update_post_fault no match end
 
 /*****************************/
 /* client block_cli_if_recover */
@@ -143,20 +354,19 @@ static inline block_cli_if_desc_update_IDL_fname(int id) {
 desc_global_true
 // block_cli_if_recover pred 1 end
 // block_cli_if_recover 1 start
-static inline int call_introspect_creator(int id) {}
-
 static inline void block_cli_if_recover(int id) {
-	spdid_t creater_component;
+	/* spdid_t creater_component; */
 	
-	assert(id);
-	creater_component = call_introspect_creator(id);
-	assert(creater_component);
+	/* assert(id); */
+	/* creater_component = call_introspect_creator(id); */
+	/* assert(creater_component); */
 	
-	if (creater_component != cos_spd_id()) {
-		call_recover_upcall(creater_component, id);
-	} else {
-		block_cli_if_basic_id(id);
-	}
+	/* if (creater_component != cos_spd_id()) { */
+	/* 	call_recover_upcall(creater_component, id); */
+	/* } else { */
+	/* 	block_cli_if_basic_id(id); */
+	/* } */
+	block_cli_if_basic_id(id);
 }
 // block_cli_if_recover 1 end
 
@@ -178,7 +388,7 @@ static inline void block_cli_if_recover(int id) {
 /* client block_cli_if_basic_id */
 /*****************************/
 // block_cli_if_basic_id pred 1 start
-desc_dep_create_same
+desc_dep_create_same&desc_global_false
 // block_cli_if_basic_id pred 1 end
 // block_cli_if_basic_id 1 start
 static inline void block_cli_if_basic_id(int id) {
@@ -190,7 +400,7 @@ static inline void block_cli_if_basic_id(int id) {
 again:
 	retval = IDL_fname(IDL_desc_saved_params);
 	//TODO: define the error code for non-recovered parent
-	// thinking...
+	// thinking...1111111
 	if (retval == -EINVAL) {
 		id = desc->IDL_parent_id;
 		call_desc_update(id, state_IDL_fname);
@@ -198,15 +408,44 @@ again:
 	} 
 
 	assert(retval);
-	desc->state = IDL_init_state;
+	desc->state = IDL_init_state;       // set the state to the initial state
+	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
 	block_cli_if_recover_data(desc);
+	return;
 }
 // block_cli_if_basic_id 1 end
 
 // block_cli_if_basic_id pred 2 start
-desc_dep_create_single
+desc_dep_create_same&desc_global_true
 // block_cli_if_basic_id pred 2 end
 // block_cli_if_basic_id 2 start
+static inline void block_cli_if_basic_id(int id) {
+	assert(id);
+	struct desc_track *desc = call_desc_lookup(id);
+	assert(desc);
+	
+	int retval = 0;
+again:
+	retval = IDL_fname_exist(IDL_desc_saved_params, desc->IDL_server_id);
+	//TODO: define the error code for non-recovered parent
+	// thinking...2222
+	if (retval == -EINVAL) {
+		id = desc->IDL_parent_id;
+		call_desc_update(id, state_IDL_fname);
+		goto again;
+	} 
+
+	assert(retval);
+	desc->state = IDL_init_state;       // set the state to the initial state
+	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
+	block_cli_if_recover_data(desc);
+}
+// block_cli_if_basic_id 2 end
+
+// block_cli_if_basic_id pred 3 start
+desc_dep_create_single
+// block_cli_if_basic_id pred 3 end
+// block_cli_if_basic_id 3 start
 static inline void block_cli_if_basic_id(int id) {
 
 	assert(id);
@@ -221,17 +460,45 @@ static inline void block_cli_if_basic_id(int id) {
 	assert(new_desc);
 	
 	desc->IDL_server_id = new_desc->IDL_server_id;
-	desc->state = IDL_init_state;
+	desc->state = IDL_init_state;       // set the state to the initial state
+	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
+
 	call_desc_dealloc(new_desc);
-	
 	block_cli_if_recover_data(desc);
 }
-// block_cli_if_basic_id 2 end
+// block_cli_if_basic_id 3 end
 
 // block_cli_if_basic_id no match start
 static inline void block_cli_if_basic_id(int id) {
 }
 // block_cli_if_basic_id no match end
+
+
+/*****************************/
+/* client block_cli_if_upcall_creator */
+/*****************************/
+// block_cli_if_upcall_creator pred 1 start
+desc_global_true
+// block_cli_if_upcall_creator pred 1 end
+// block_cli_if_upcall_creator 1 start
+static inline void block_cli_if_upcall_creator(int id) {
+	IDL_service_upcall_creator(cos_spd_id(), id);
+}
+// block_cli_if_upcall_creator 1 end
+
+// block_cli_if_upcall_creator pred 2 start
+desc_global_false
+// block_cli_if_upcall_creator pred 2 end
+// block_cli_if_upcall_creator 2 start
+static inline void block_cli_if_upcall_creator(int id) {
+}
+// block_cli_if_upcall_creator 2 end
+
+// block_cli_if_upcall_creator no match start
+static inline void block_cli_if_upcall_creator(int id) {
+}
+// block_cli_if_upcall_creator no match end
+
 
 /**************************************/
 /* client block_cli_if_recover_upcall */
@@ -256,8 +523,7 @@ static inline void block_cli_if_recover_upcall(int id) {
 /* client block_cli_if_recover_subtree */
 /**************************************/
 // block_cli_if_recover_subtree pred 1 start
-desc_close_subtree
-desc_create_diff
+desc_create_diff&desc_close_subtree
 terminal
 // block_cli_if_recover_subtree pred 1 end
 // block_cli_if_recover_subtree 1 start
@@ -282,6 +548,16 @@ static inline void block_cli_if_recover_subtree(int id) {
 }
 // block_cli_if_recover_subtree 1 end
 
+// block_cli_if_recover_subtree pred 2 start
+desc_close_itself
+terminal
+// block_cli_if_recover_subtree pred 2 end
+// block_cli_if_recover_subtree 2 start
+static inline void block_cli_if_recover_subtree(int id) {
+}
+// block_cli_if_recover_subtree 2 end
+
+
 // block_cli_if_recover_subtree no match start
 static inline void block_cli_if_recover_subtree(int id) {
 }
@@ -292,6 +568,7 @@ static inline void block_cli_if_recover_subtree(int id) {
 /*****************************/
 
 // block_cli_if_track pred 1 start
+desc_global_false
 creation
 // block_cli_if_track pred 1 end
 // block_cli_if_track 1 start
@@ -309,28 +586,44 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 // block_cli_if_track 1 end
 
 // block_cli_if_track pred 2 start
-desc_dep_close_removal
-terminal
+desc_global_true
+creation
 // block_cli_if_track pred 2 end
 // block_cli_if_track 2 start
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
-	struct desc_track *desc = call_desc_lookup(IDL_id);
-	assert(desc);
-	call_desc_dealloc(desc);
+	// if ret does not exist, just return as it is, thinking....
+	if (ret == -EINVAL) return ret;
 
-	return ret;
+	struct desc_track *desc = call_desc_alloc(ret);
+	assert(desc);
+	call_desc_cons(desc, ret, IDL_params);
+	IDL_curr_state;
+
+	return desc->IDL_id;
 }
 // block_cli_if_track 2 end
 
 // block_cli_if_track pred 3 start
-desc_dep_close_keep
+desc_dep_close_removal
 terminal
 // block_cli_if_track pred 3 end
 // block_cli_if_track 3 start
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
-	assert(desc);
-	call_desc_dealloc(desc);
+	if (desc) call_desc_dealloc(desc);
+
+	return ret;
+}
+// block_cli_if_track 3 end
+
+// block_cli_if_track pred 4 start
+desc_dep_close_keep
+terminal
+// block_cli_if_track pred 4 end
+// block_cli_if_track 4 start
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(IDL_id);
+	if (desc) call_desc_dealloc(desc);
 
 	return ret;
 	// TODO: this needs to be changed
@@ -339,33 +632,31 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	/* 	call_desc_dealloc(desc); */
 	/* } */
 }
-// block_cli_if_track 3 end
-
-// block_cli_if_track pred 4 start
-terminal
-// block_cli_if_track pred 4 end
-// block_cli_if_track 4 start
-static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
-	struct desc_track *desc = call_desc_lookup(IDL_id);
-	assert(desc);
-	call_desc_dealloc(desc);
-
-	return ret;
-}
 // block_cli_if_track 4 end
 
 // block_cli_if_track pred 5 start
-transition
+terminal
 // block_cli_if_track pred 5 end
 // block_cli_if_track 5 start
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
-	assert(desc);
-	IDL_curr_state;
+	if(desc) call_desc_dealloc(desc);
 
 	return ret;
 }
 // block_cli_if_track 5 end
+
+// block_cli_if_track pred 6 start
+transition
+// block_cli_if_track pred 6 end
+// block_cli_if_track 6 start
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(IDL_id);
+	if (desc) { IDL_curr_state; }
+
+	return ret;
+}
+// block_cli_if_track 6 end
 
 // block_cli_if_track_IDL_fname no match start
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
@@ -417,7 +708,7 @@ static inline void block_cli_if_save_data(int id, void *data) {
 desc_global_true
 // block_cli_if_recover_upcall_entry pred 1 end
 // block_cli_if_recover_upcall_entry 1 start
-static inline void block_cli_if_recover_upcall_entry(int id) {
+void IDL_service_cli_if_recover_upcall_entry(int id) {
 	block_cli_if_recover_upcall(id);
 }
 // block_cli_if_recover_upcall_entry 1 end
@@ -429,7 +720,7 @@ static inline void block_cli_if_recover_upcall_entry(int id) {
 /* client interface call recovery_upcall_extern   */
 /********************************************/
 // block_cli_if_recover_upcall_extern pred 1 start
-desc_global_true|desc_create_diff
+desc_global_true&desc_create_diff
 // block_cli_if_recover_upcall_extern pred 1 end
 // block_cli_if_recover_upcall_extern 1 start
 extern void call_recover_upcall(int dest_spd, int id);
@@ -439,37 +730,6 @@ extern void call_recover_upcall(int dest_spd, int id);
 // block_cli_if_recover_upcall_extern no match end
 
 // client func decl start
-static inline struct desc_track *call_desc_lookup(int id) {
-	/* return (struct desc_track *)cvect_lookup(&rd_vect, id); */
-	 return (struct desc_track *)cos_map_lookup(&IDL_service_desc_maps, id);
-}
-
-static inline struct desc_track *call_desc_alloc() {
-	struct desc_track *desc = NULL;
-	int map_id = 0;
-
-	while(1) {
-		desc = cslab_alloc_IDL_service_slab();
-		assert(desc);	
-		map_id = cos_map_add(&IDL_service_desc_maps, desc);
-		desc->IDL_id        = map_id;
-		desc->IDL_server_id = -1;  // reset to -1
-		if (map_id >= 2) break;
-	}
-	assert(desc && desc->IDL_id >= 1);
-	return desc;	
-}
-
-static inline void call_desc_dealloc(struct desc_track *desc) {
-	assert(desc);
-	int id = desc->IDL_id;
-	desc->IDL_server_id = -1;  // reset to -1
-	assert(desc);
-	cslab_free_IDL_service_slab(desc);
-	cos_map_del(&IDL_service_desc_maps, id);
-	return;
-}
-
 static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl) {
 	assert(desc);
 
@@ -482,45 +742,23 @@ static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl)
 	return;
 }
 
-/* static inline struct desc_track *call_desc_alloc(int id) { */
-/* 	struct desc_track *_desc_track; */
-
-/* 	_desc_track = (struct desc_track *)cslab_alloc_rdservice(); */
-/* 	assert(_desc_track); */
-/* 	if (cvect_add(&rd_vect, _desc_track, id)) { */
-/* 		assert(0); */
-/* 	} */
-/* 	_desc_track->IDL_id = id; */
-/* 	return _desc_track; */
-/* } */
-
-/* static inline void call_desc_dealloc(struct desc_track *desc) { */
-/* 	assert(desc); */
-/* 	assert(!cvect_del(&rd_vect, desc->IDL_id)); */
-/* 	cslab_free_rdservice(desc); */
-/* } */
-
-/* static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl) { */
-/* 	assert(desc); */
-
-/* 	desc->IDL_id = id; */
-/* 	desc->IDL_server_id = id; */
-/* 	IDL_desc_cons; */
-/* 	return; */
-/* } */
-
 static inline struct desc_track *call_desc_update(int id, int next_state) {
 	struct desc_track *desc = NULL;
 	unsigned int from_state = 0;
 	unsigned int to_state = 0;
 
+	if (id == IDL_root_id) return NULL;  /* root id*/
+
         desc = call_desc_lookup(id);
-	if (unlikely(!desc)) goto done;
+	if (unlikely(!desc)) {
+		block_cli_if_upcall_creator(id);
+		goto done;
+	}
 
 	desc->next_state = next_state;
 
 	if (likely(desc->fault_cnt == global_fault_cnt)) goto done;
-	desc->fault_cnt = global_fault_cnt;
+	/* desc->fault_cnt = global_fault_cnt; */
 
 	// State machine transition under the fault
 	block_cli_if_recover(id);
@@ -545,14 +783,41 @@ if ((from_state == IDL_current_state) && (to_state == IDL_next_state)) {
 /*****************************/
 /* client interface cstub fn */
 /*****************************/
+/* // client cstub startbak */
+/* CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) { */
+/* 	long fault = 0; */
+/* 	int ret = 0; */
+	
+/* 	call_map_init(); */
+/* redo: */
+/* 	block_cli_if_desc_update_IDL_fname(IDL_id); */
+
+/* 	IDL_benchmark_end */
+
+/* 	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc);  */
+/*         if (unlikely (fault)){ */
+
+/* 		IDL_benchmark_start */
+
+/* 		CSTUB_FAULT_UPDATE(); */
+/*                 goto redo; */
+/*         } */
+/* 	ret = block_cli_if_track_IDL_fname(ret, IDL_params); */
+ 
+/*         return ret; */
+/* } */
+/* // client cstub endbak */
+
+
 // client cstub start
 CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	long fault = 0;
 	int ret = 0;
 	
-	IDL_init_maps
+	call_map_init();
+
 redo:
-	block_cli_if_desc_update_IDL_fname(IDL_id);
+	block_cli_if_desc_update_pre_IDL_fname(IDL_idIDL_parent_id);
 
 	IDL_benchmark_end
 
@@ -562,7 +827,9 @@ redo:
 		IDL_benchmark_start
 
 		CSTUB_FAULT_UPDATE();
-                goto redo;
+		if (block_cli_if_desc_update_post_fault_IDL_fname(IDL_idIDL_parent_id)) {
+			goto redo;
+		}
         }
 	ret = block_cli_if_track_IDL_fname(ret, IDL_params);
  
@@ -575,9 +842,7 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	long fault = 0;
 	int ret = 0;
 	
-	IDL_init_maps
-
-	block_cli_if_desc_update_IDL_fname(IDL_id);
+	call_map_init();
 
 	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc); 
         if (unlikely (fault)){
@@ -588,6 +853,8 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 		block_cli_if_desc_update_IDL_fname(IDL_id);		
 
 		IDL_benchmark_end
+
+		return ret;
         }
 	ret = block_cli_if_track_IDL_fname(ret, IDL_params);
  
@@ -595,13 +862,10 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 }
 // client cstub no redo end
 
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-/* server interface   */
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
+/*  ___  ___ _ ____   _____ _ __  (_)_ __ | |_ ___ _ __ / _| __ _  ___ ___  */
+/* / __|/ _ \ '__\ \ / / _ \ '__| | | '_ \| __/ _ \ '__| |_ / _` |/ __/ _ \ */
+/* \__ \  __/ |   \ V /  __/ |    | | | | | ||  __/ |  |  _| (_| | (_|  __/ */
+/* |___/\___|_|    \_/ \___|_|    |_|_| |_|\__\___|_|  |_|  \__,_|\___\___| */
 
 // server track start
 struct track_block {
@@ -619,7 +883,7 @@ struct track_block tracking_block_list[MAX_NUM_SPDS];
 server_block
 // block_ser_if_block_track pred 1 end
 // block_ser_if_block_track 1 start
-static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
+static inline int block_ser_if_block_track_IDL_fname(IDL_parsdecl) {
 	int ret = 0;
 	struct track_block tb;  // track on stack
 
@@ -634,7 +898,7 @@ static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
 
 	IDL_RELEASE;
 
-	ret = IDL_block_fname(IDL_block_params);
+	ret = IDL_fname(IDL_params);
 
 	IDL_TAKE;
 
@@ -645,14 +909,14 @@ static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
 	return ret;
 }
 
-IDL_fntype __ser_IDL_block_fname(IDL_parsdecl) {
-	return block_ser_if_block_track_IDL_block_fname(IDL_block_params);
+IDL_fntype __ser_IDL_fname(IDL_parsdecl) {
+	return block_ser_if_block_track_IDL_fname(IDL_params);
 }
 
 // block_ser_if_block_track 1 end
 
 // block_ser_if_block_track no match start
-static inline int block_ser_if_block_track_IDL_block_fname(IDL_parsdecl) {
+static inline int block_ser_if_block_track_IDL_fname(IDL_parsdecl) {
 }
 // block_ser_if_block_track no match end
 
@@ -677,7 +941,7 @@ static inline void block_ser_if_client_fault_notification(int IDL_from_spd) {
 
 		IDL_RELEASE;
 
-		IDL_wakeup_fname(IDL_wakeup_params);
+		IDL_fname(IDL_params);
 
 		IDL_TAKE;
 	}
@@ -700,13 +964,63 @@ static inline void block_ser_if_client_fault_notification(spdid_t spdid) {
 }
 // block_ser_if_client_fault_notification no match end
 
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-/* marshalling with cbuf   */
-///////////////////////////////////////////////
-///////////////////////////////////////////////
-///////////////////////////////////////////////
+/***********************************/
+/* server block_ser_if_recreate_exist */
+/***********************************/
+// block_ser_if_recreate_exist pred 1 start
+desc_global_true
+// block_ser_if_recreate_exist pred 1 end
+// block_ser_if_recreate_exist 1 start
+IDL_fntype __ser_IDL_fname_exist(IDL_parsdecl, int existing_id) {
+	IDL_fntype ret = 0;
+	ret = IDL_fname_exist(IDL_params, existing_id);
+	return ret;
+}
+// block_ser_if_recreate_exist 1 end
+
+// block_ser_if_recreate_exist pred 2 start
+desc_global_false
+// block_ser_if_recreate_exist pred 2 end
+// block_ser_if_recreate_exist 2 start
+IDL_fntype __ser_IDL_recreate_fname_exist(IDL_parsdecl, int existing_id) {
+}
+// block_ser_if_recreate_exist 2 end
+
+// block_ser_if_recreate_exist no match start
+// block_ser_if_recreate_exist no match end
+
+/***********************************/
+/* server block_ser_if_upcall_creator */
+/***********************************/
+// block_ser_if_upcall_creator pred 1 start
+desc_global_true
+// block_ser_if_upcall_creator pred 1 end
+// block_ser_if_upcall_creator 1 start
+extern int ns_upcall(spdid_t spdid, int id);
+int __ser_IDL_service_upcall_creator(spdid_t spdid, int id) {
+	int ret = 0;
+	ns_upcall(spdid, id);
+	return ret;
+}
+// block_ser_if_upcall_creator 1 end
+
+// block_ser_if_upcall_creator pred 2 start
+desc_global_false
+// block_ser_if_upcall_creator pred 2 end
+// block_ser_if_upcall_creator 2 start
+int __ser_IDL_service_upcall_creator(spdid_t spdid, int id) {
+}
+// block_ser_if_upcall_creator 2 end
+
+// block_ser_if_upcall_creator no match start
+// block_ser_if_upcall_creator no match end
+
+/*                           _           _ _ _              */
+/*  _ __ ___   __ _ _ __ ___| |__   __ _| | (_)_ __   __ _  */
+/* | '_ ` _ \ / _` | '__/ __| '_ \ / _` | | | | '_ \ / _` | */
+/* | | | | | | (_| | |  \__ \ | | | (_| | | | | | | | (_| | */
+/* |_| |_| |_|\__,_|_|  |___/_| |_|\__,_|_|_|_|_| |_|\__, | */
+/*                                                   |___/  */
 
 // marshalling ds start
 
@@ -725,7 +1039,7 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	long fault = 0;
 	int ret = 0;
 
-	IDL_init_maps
+	call_map_init();
 
         struct __ser_IDL_fname_marshalling *md = NULL;
 	cbuf_t cb = 0;
@@ -761,7 +1075,7 @@ redo:
 /* client block_cli_if_invoke  marshalling version (from previous)*/
 /****************************************************/
 // block_cli_if_marshalling_invoke pred 1 start
-desc_dep_create_same|desc_dep_create_diff
+desc_dep_create_same
 creation
 // block_cli_if_marshalling_invoke pred 1 end
 // block_cli_if_marshalling_invoke 1 start
@@ -783,10 +1097,32 @@ static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int re
 // block_cli_if_marshalling_invoke 1 end
 
 // block_cli_if_marshalling_invoke pred 2 start
-desc_dep_create_single
+desc_dep_create_diff
 creation
 // block_cli_if_marshalling_invoke pred 2 end
 // block_cli_if_marshalling_invoke 2 start
+static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz, cbuf_t cb) {
+	struct desc_track *parent_desc = NULL;
+	// thinking....
+	if ((IDL_parent_id > 1) && (parent_desc = call_desc_lookup(IDL_parent_id))) {
+		IDL_parent_id = parent_desc->IDL_server_id;
+	}
+
+	IDL_marshalling_cons;
+	
+	long __fault = 0;
+	CSTUB_INVOKE(ret, __fault, uc, 3, IDL_from_spd, cb, sz);
+	*fault = __fault;
+	
+	return ret;
+}
+// block_cli_if_marshalling_invoke 2 end
+
+// block_cli_if_marshalling_invoke pred 3 start
+desc_dep_create_single
+creation
+// block_cli_if_marshalling_invoke pred 3 end
+// block_cli_if_marshalling_invoke 3 start
 static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz, cbuf_t cb) {
 
 	IDL_marshalling_cons;
@@ -797,13 +1133,13 @@ static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int re
 
 	return ret;
 }
-// block_cli_if_marshalling_invoke 2 end
+// block_cli_if_marshalling_invoke 3 end
 
-// block_cli_if_marshalling_invoke pred 3 start
+// block_cli_if_marshalling_invoke pred 4 start
 desc_global_true
 transition|terminal
-// block_cli_if_marshalling_invoke pred 3 end
-// block_cli_if_marshalling_invoke 3 start
+// block_cli_if_marshalling_invoke pred 4 end
+// block_cli_if_marshalling_invoke 4 start
 static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz, cbuf_t cb) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 
@@ -824,13 +1160,13 @@ static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int re
 
 	return ret;
 }
-// block_cli_if_marshalling_invoke 3 end
+// block_cli_if_marshalling_invoke 4 end
 
-// block_cli_if_marshalling_invoke pred 4 start
+// block_cli_if_marshalling_invoke pred 5 start
 desc_global_false
 transition|terminal
-// block_cli_if_marshalling_invoke pred 4 end
-// block_cli_if_marshalling_invoke 4 start
+// block_cli_if_marshalling_invoke pred 5 end
+// block_cli_if_marshalling_invoke 5 start
 static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz, cbuf_t cb) {
 	struct desc_track *desc = call_desc_lookup(IDL_id);
 	assert(desc);  // must be created in the same component
@@ -842,7 +1178,7 @@ static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int re
 
 	return ret;
 }
-// block_cli_if_marshalling_invoke 4 end
+// block_cli_if_marshalling_invoke 5 end
 
 // block_cli_if_marshalling_invoke no match start
 static inline int block_cli_if_marshalling_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc, struct __ser_IDL_fname_marshalling *md, int sz) {

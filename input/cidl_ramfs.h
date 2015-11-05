@@ -1,5 +1,5 @@
-#ifndef _COS_IDL_H
-#define _COS_IDL_H
+#ifndef _COS_IDL_RAMFS_H
+#define _COS_IDL_RAMFS_H
 
 #include "cidl_gen.h"
 
@@ -25,12 +25,12 @@ sm_terminal(trelease);
 
 desc_data_retval(td_t, tid)
 tsplit(spdid_t desc_data(spdid),
-	   td_t desc_data(parent_desc(parent_tid)),
-	   char *desc_data(param),
-	   int desc_data(size_of(param, len)),
-	   tor_flags_t desc_data(tflags),
-	   long desc_data(evtid));
-	   
+       td_t desc_data(parent_desc(parent_tid)),
+       char *desc_data(param),
+       int desc_data(size_of(param, len)),
+       tor_flags_t desc_data(tflags),
+       long desc_data(evtid));
+
 /* treadp returns cbuf id  */
 int
 treadp(spdid_t spdid,
@@ -66,4 +66,4 @@ trelease(spdid_t spdid,
 /*        const char *val, */
 /*        unsigned int vlen); */
 
-#endif /* _COS_IDL_H */
+#endif /* _COS_IDL_RAMFS_H */

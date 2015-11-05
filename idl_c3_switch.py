@@ -18,6 +18,8 @@ ramfs_if_path   = "/home/songjiguo/research/composite/src/components/interface/r
 ramfs_path      = ramfs_if_path + "stubs/"
 lock_if_path    = "/home/songjiguo/research/composite/src/components/interface/lock/"
 lock_path       = lock_if_path + "stubs/"
+evt_if_path    = "/home/songjiguo/research/composite/src/components/interface/evt/"
+evt_path       = evt_if_path + "stubs/"
 sched_if_path    = "/home/songjiguo/research/composite/src/components/interface/sched/"
 sched_path      = sched_if_path + "stubs/"
 
@@ -29,6 +31,8 @@ REFLECTION_S_STUB_DIR = ""
 
 if (sys.argv[2] == "ramfs"):
     REFLECTION_S_STUB_DIR = lock_path
+elif (sys.argv[2] == "evt"):
+    REFLECTION_S_STUB_DIR = lock_path
 elif (sys.argv[2] == "lock"):
     REFLECTION_S_STUB_DIR = sched_path
 else:
@@ -38,7 +42,7 @@ if (sys.argv[1] != "cos" and sys.argv[1] != "idl" and sys.argv[1] != "man"):
     print ("wrong mode!!!")
     exit()
 
-if (sys.argv[2] != "ramfs" and sys.argv[2] != "lock"):
+if (sys.argv[2] != "ramfs" and sys.argv[2] != "lock" and sys.argv[2] != "evt"):
     print ("wrong service!!!")
     exit()
 
@@ -48,6 +52,8 @@ if (sys.argv[1] == "cos"):
         path = lock_if_path
     elif (sys.argv[2] == "ramfs"):
         path = ramfs_if_path
+    elif (sys.argv[2] == "evt"):
+        path = evt_if_path
     else:
         path = ""
 elif (sys.argv[1] == "idl" or sys.argv[1] == "man"):
@@ -57,6 +63,9 @@ elif (sys.argv[1] == "idl" or sys.argv[1] == "man"):
     elif (sys.argv[2] == "ramfs"):
         COS_STUB_DIR = "__stubs_rec_ramfs"
         path = ramfs_if_path
+    elif (sys.argv[2] == "evt"):
+        COS_STUB_DIR = "__stubs_rec"
+        path = evt_if_path
     else:
         path = ""
 
@@ -67,9 +76,9 @@ if not COS_STUB_DIR:
 
 print("[[[ "+ sys.argv[2] + " in "+ sys.argv[1] + " mode ]]]")
 
-#print(path)
-#print(COS_STUB_DIR)
-#print(REFLECTION_S_STUB_DIR)
+#print("stub path :" + path)
+#print("stub for the mode "+ sys.argv[1] + " :"  + COS_STUB_DIR)
+#print("reflection on stub: "+REFLECTION_S_STUB_DIR)
 os.chdir(path)
 #exit()
 

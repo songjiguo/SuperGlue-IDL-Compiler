@@ -23,6 +23,9 @@ plot_graph   = False
 final_output = False
 bench = False
 
+# define the root id for all services (even the service does not have dependency)
+rootid = {"ramfs":"1", "evt":"0", "lock":"0"}
+
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
     def __init__(self):
@@ -56,7 +59,6 @@ def bench_code():
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
-
 def build_blk_code(blknode, blkname):
     tmp = blkname.lower()
     blkstr = tmp.replace("_", "\_")
@@ -154,6 +156,27 @@ def block_cli_if_track():
     printc (BLOCK_CLI_IF_TRACK.list)
     printc ("")
     return BLOCK_CLI_IF_TRACK    
+
+def block_cli_if_tracking_map_ds():
+    BLOCK_CLI_IF_TRACKING_MAP_DS = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_DS, "BLOCK_CLI_IF_TRACKING_MAP_DS")
+    printc (BLOCK_CLI_IF_TRACKING_MAP_DS.list)
+    printc ("")
+    return BLOCK_CLI_IF_TRACKING_MAP_DS    
+
+def block_cli_if_tracking_map_fn():
+    BLOCK_CLI_IF_TRACKING_MAP_FN = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_FN, "BLOCK_CLI_IF_TRACKING_MAP_FN")
+    printc (BLOCK_CLI_IF_TRACKING_MAP_FN.list)
+    printc ("")
+    return BLOCK_CLI_IF_TRACKING_MAP_FN    
+
+def block_cli_if_map_init():
+    BLOCK_CLI_IF_MAP_INIT = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_MAP_INIT, "BLOCK_CLI_IF_MAP_INIT")
+    printc (BLOCK_CLI_IF_MAP_INIT.list)
+    printc ("")
+    return BLOCK_CLI_IF_MAP_INIT
             
 def block_cli_if_recover_subtree():
     BLOCK_CLI_IF_RECOVER_SUBTREE = IDLBlock()    
@@ -190,12 +213,19 @@ def block_cli_if_invoke_ser_intro():
     printc ("")
     return BLOCK_CLI_IF_INVOKE_SER_INTRO
 
-def block_cli_if_desc_update():
-    BLOCK_CLI_IF_DESC_UPDATE = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE, "BLOCK_CLI_IF_DESC_UPDATE")
-    printc (BLOCK_CLI_IF_DESC_UPDATE.list)
+def block_cli_if_desc_update_pre():
+    BLOCK_CLI_IF_DESC_UPDATE_PRE = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_PRE, "BLOCK_CLI_IF_DESC_UPDATE_PRE")
+    printc (BLOCK_CLI_IF_DESC_UPDATE_PRE.list)
     printc ("")
-    return BLOCK_CLI_IF_DESC_UPDATE
+    return BLOCK_CLI_IF_DESC_UPDATE_PRE
+
+def block_cli_if_desc_update_post_fault():
+    BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT, "BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT")
+    printc (BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT.list)
+    printc ("")
+    return BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT
 
 def block_cli_if_invoke():
     BLOCK_CLI_IF_INVOKE = IDLBlock()    
@@ -211,6 +241,27 @@ def block_cli_if_marshalling_invoke():
     printc ("")
     return BLOCK_CLI_IF_MARSHALLING_INVOKE
 
+def block_ser_if_recreate_exist():
+    BLOCK_SER_IF_RECREATE_EXIST = IDLBlock()    
+    build_blk_code(BLOCK_SER_IF_RECREATE_EXIST, "BLOCK_SER_IF_RECREATE_EXIST")
+    printc (BLOCK_SER_IF_RECREATE_EXIST.list)
+    printc ("")
+    return BLOCK_SER_IF_RECREATE_EXIST
+
+def block_ser_if_upcall_creator():
+    BLOCK_SER_IF_UPCALL_CREATOR = IDLBlock()    
+    build_blk_code(BLOCK_SER_IF_UPCALL_CREATOR, "BLOCK_SER_IF_UPCALL_CREATOR")
+    printc (BLOCK_SER_IF_UPCALL_CREATOR.list)
+    printc ("")
+    return BLOCK_SER_IF_UPCALL_CREATOR
+
+def block_cli_if_upcall_creator():
+    BLOCK_CLI_IF_UPCALL_CREATOR = IDLBlock()    
+    build_blk_code(BLOCK_CLI_IF_UPCALL_CREATOR, "BLOCK_CLI_IF_UPCALL_CREATOR")
+    printc (BLOCK_CLI_IF_UPCALL_CREATOR.list)
+    printc ("")
+    return BLOCK_CLI_IF_UPCALL_CREATOR
+
 def block_ser_if_block_track():
     BLOCK_SER_IF_BLOCK_TRACK = IDLBlock()    
     build_blk_code(BLOCK_SER_IF_BLOCK_TRACK, "BLOCK_SER_IF_BLOCK_TRACK")
@@ -224,7 +275,6 @@ def block_ser_if_client_fault_notification():
     printc (BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION.list)
     printc ("")
     return BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION
-
 
 def read_from_template_code(IFcode):
     cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
@@ -307,20 +357,35 @@ def read_from_template_code(IFcode):
 
 
 def get_lock_function(IFcode, service_name):
-    composite_path = '/home/songjiguo/research/composite/src'
+    composite_path = '/home/songjiguo/research/composite/src'    
     cmd = 'find ' + composite_path + " -name " + service_name + ".c"
+    
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     path, err = p.communicate()
+    if (service_name == "evt"):  
+        for item in path.split("\n"):
+            if ("_grp" in item): # hack for edge and edge_grp (start with this now)
+                path = item
+    else:
+        path = path.split("\n")[0]  # there might be more than one file (e.g., evt.c)
+
     cmd = 'sed -nr \"/\<lock take start\>/{:a;n;/'\
           '\<lock take end\>/b;p;ba} \" ' + path
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["lock_take_func"] = code.replace("\\","")
+
     cmd = 'sed -nr \"/\<lock release start\>/{:a;n;/'\
           '\<lock release end\>/b;p;ba} \" ' + path
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["lock_release_func"] = code.replace("\\","")
+
+    cmd = 'sed -nr \"/\<lock name start\>/{:a;n;/'\
+          '\<lock name end\>/b;p;ba} \" ' + path
+    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    code, err = p.communicate()
+    IFcode["lock_name"] = code.replace("\\","")
 
 # pycparser related
 typedecl                    = "TypeDecl"
@@ -451,6 +516,14 @@ def  draw_sm_transition(smg):
     # testg = smg + parent_smg
     # plot(testg, **visual_style)
     #===========================================================================
+
+evt_norm_stub_S_str = '''
+cos_asm_server_stub_spdid(evt_grp_wait)
+cos_asm_server_stub_spdid(evt_set_prio)
+cos_asm_server_stub_spdid(evt_create) 
+cos_asm_server_stub_spdid(evt_stats) 
+cos_asm_server_stub_spdid(evt_stats_len)
+'''
 
 slab_alloc_str = '''
 extern void *alloc_page(void);

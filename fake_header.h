@@ -19,6 +19,8 @@ int tmp;
 #define cvect_lookup(x, y) tmp
 #define cos_map_lookup(x, y) tmp
 
+#define cvect_init_static(x) 
+
 #define ramfs_desc_maps tmp
 #define cslab_alloc_ramfs_slab() NULL
 #define cslab_free_ramfs_slab(x) NULL
@@ -26,6 +28,15 @@ int tmp;
 #define lock_desc_maps tmp
 #define cslab_alloc_lock_slab() NULL
 #define cslab_free_lock_slab(x) NULL
+
+#define evt_desc_maps tmp
+#define cslab_alloc_evt_slab() NULL
+#define cslab_free_evt_slab(x) NULL
+
+int hahalock = 10;
+#define evt_lock hahalock
+#define lock_take(x) 
+#define lock_release(x) 
 
 #define cos_map_add(x, y) 0
 #define cos_map_del(x, y) 0
@@ -38,6 +49,7 @@ int tmp;
 #define likely(x) x
 
 #define cvect_add(x, y, z) 0
+#define cvect_del(x, y) 0
 #define cslab_free_rdservice(x)
 #define cslab_alloc_rdservice() 0
 
@@ -99,9 +111,17 @@ int lock_component_release(){}
 
 int sched_component_take(){}
 int sched_component_release(){}
+
+int evt_upcall_creator(){}
+int evt_split(){}
+int evt_split_exist(){}
+int evt_wait(){}
+int evt_trigger(){}
+int evt_free(){}
+
 #define BUG(); {;}
 #define EINVAL 0
-
+#define extern 
 int cos_spd_id(){}
 
 int cbuf2buf(){}

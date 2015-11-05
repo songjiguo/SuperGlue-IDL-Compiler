@@ -53,6 +53,10 @@ int __ser_lock_component_take(spdid_t spdid, ul_t lock_id, u32_t thd_id)
 							    thd_id);
 }
 
+ul_t __ser_IDL_recreate_fname_exist(spdid_t spdid, int existing_id)
+{
+}
+
 static inline void block_ser_if_client_fault_notification(int spdid)
 {
 	struct track_block *tb;

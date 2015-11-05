@@ -1,7 +1,7 @@
-# 1 "input/cidl_lock.h"
+# 1 "input/cidl_evt.h"
 # 1 "<built-in>"
 # 1 "<command-line>"
-# 1 "input/cidl_lock.h"
+# 1 "input/cidl_evt.h"
 
 
 
@@ -61,45 +61,42 @@ typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
 struct usr_inv_cap {int a;};
-# 5 "input/cidl_lock.h" 2
+# 5 "input/cidl_evt.h" 2
 
 struct global_info sgi = {
- .service_name = lock,
+ .service_name = evt,
         .desc_close = itself,
-        .desc_dep_create = single,
-        .desc_dep_close = none,
-        .desc_global = false,
+        .desc_dep_create = same,
+        .desc_dep_close = removal,
+        .desc_global = true,
         .desc_block = true,
-        .desc_has_data = false,
+        .desc_has_data = true,
         .resc_has_data = false,
 };
 
-void SM_creation_SM_lock_component_alloc;
-void SM_transition_SM_lock_component_alloc_SM_lock_component_free;
-void SM_transition_SM_lock_component_alloc_SM_lock_component_pretake;
-void SM_transition_SM_lock_component_pretake_SM_lock_component_take;
-void SM_transition_SM_lock_component_take_SM_lock_component_release;
-void SM_transition_SM_lock_component_release_SM_lock_component_pretake;
-void SM_transition_SM_lock_component_release_SM_lock_component_free;
-void SM_terminal_SM_lock_component_free;
+void SM_creation_SM_evt_split;
+void SM_transition_SM_evt_split_SM_evt_wait;
+void SM_transition_SM_evt_wait_SM_evt_trigger;
+void SM_transition_SM_evt_trigger_SM_evt_wait;
+void SM_transition_SM_evt_trigger_SM_evt_free;
+void SM_transition_SM_evt_split_SM_evt_free;
+void SM_terminal_SM_evt_free;
+void SM_block_SM_evt_wait;
+void SM_wakeup_SM_evt_trigger;
 
-typedef ul_t CD_desc_data_retval_CD_ul_t_CD_lock_id; CD_desc_data_retval_CD_ul_t_CD_lock_id
-lock_component_alloc(spdid_t CD_desc_data_CD_spdid);
+typedef long CD_desc_data_retval_CD_long_CD_evtid; CD_desc_data_retval_CD_long_CD_evtid
+evt_split(spdid_t CD_desc_data_CD_spdid,
+   long CD_desc_data_CD_parent_desc_CD_parent_evtid,
+   int CD_desc_data_CD_grp);
 
-int
-lock_component_take(spdid_t spdid,
-      ul_t CD_desc_lookup_CD_server_block_CD_lock_id,
-      u32_t CD_desc_data_CD_thd_id);
-
-int
-lock_component_pretake(spdid_t spdid,
-         ul_t CD_desc_lookup_CD_lock_id,
-         u32_t thd_id);
+long
+evt_wait(spdid_t spdid,
+  long CD_desc_lookup_CD_evtid);
 
 int
-lock_component_release(spdid_t spdid,
-         ul_t CD_desc_lookup_CD_server_wakeup_CD_lock_id);
+evt_trigger(spdid_t spdid,
+     long CD_desc_lookup_CD_evtid);
 
 int
-lock_component_free(spdid_t spdid,
-      ul_t CD_desc_terminate_CD_lock_id);
+evt_free(spdid_t spdid,
+  long CD_desc_lookup_CD_evtid);
