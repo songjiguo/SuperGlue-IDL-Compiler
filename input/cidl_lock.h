@@ -4,14 +4,14 @@
 #include "cidl_gen.h"
 
 service_global_info = {
-	SERVICE         = lock,
-        DESC_CLOSE      = itself,
-        DESC_DEP_CREATE = single,
-        DESC_DEP_CLOSE 	= none,
-        DESC_GLOBAL 	= false,
-        DESC_BLOCK 	= true,
-        DESC_HAS_DATA 	= false,
-        RESC_HAS_DATA 	= false,
+	service		       = lock,
+
+        desc_close_self_only   = true,
+        desc_dep_create_none   = true,
+        desc_global	       = false,
+        desc_block	       = true,
+        desc_has_data	       = false,
+        resc_has_data	       = false,
 };
 
 sm_creation(lock_component_alloc);

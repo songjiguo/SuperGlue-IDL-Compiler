@@ -1,7 +1,7 @@
-# 1 "input/cidl_evt.h"
+# 1 "input/cidl_mm.h"
 # 1 "<built-in>"
 # 1 "<command-line>"
-# 1 "input/cidl_evt.h"
+# 1 "input/cidl_mm.h"
 
 
 
@@ -48,7 +48,7 @@ struct global_info {
   int desc_has_data;
   int resc_has_data;
 };
-# 55 "input/cidl_gen.h"
+# 59 "input/cidl_gen.h"
 typedef int td_t;
 typedef int cbuf_t;
 typedef int spdid_t;
@@ -61,42 +61,41 @@ typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
 struct usr_inv_cap {int a;};
-# 5 "input/cidl_evt.h" 2
+# 5 "input/cidl_mm.h" 2
 
 struct global_info sgi = {
- .service_name = evt,
-        .desc_close = itself,
-        .desc_dep_create = same,
-        .desc_dep_close = removal,
+ .service_name = mem_mgr,
+
+        .desc_close_subtree = true,
+        .desc_dep_create_diff = true,
+        .desc_dep_close_removal = true,
         .desc_global = true,
-        .desc_block = true,
+        .desc_block = false,
         .desc_has_data = true,
-        .resc_has_data = false,
+        .resc_has_data = true,
 };
 
-void SM_creation_SM_evt_split;
-void SM_transition_SM_evt_split_SM_evt_wait;
-void SM_transition_SM_evt_wait_SM_evt_trigger;
-void SM_transition_SM_evt_trigger_SM_evt_wait;
-void SM_transition_SM_evt_trigger_SM_evt_free;
-void SM_transition_SM_evt_split_SM_evt_free;
-void SM_terminal_SM_evt_free;
-void SM_block_SM_evt_wait;
-void SM_wakeup_SM_evt_trigger;
+void SM_creation_SM___mman_alias_page;
+void SM_transition_SM___mman_alias_page_SM___mman_alias_page;
+void SM_terminal_SM_mman_revoke_page;
 
-typedef long CD_desc_data_retval_CD_long_CD_evtid; CD_desc_data_retval_CD_long_CD_evtid
-evt_split(spdid_t CD_desc_data_CD_spdid,
-   long CD_desc_data_CD_parent_desc_CD_parent_evtid,
-   int CD_desc_data_CD_grp);
-
-long
-evt_wait(spdid_t spdid,
-  long CD_desc_lookup_CD_evtid);
+vaddr_t
+mman_get_page(spdid_t CD_desc_data_CD_spd,
+       vaddr_t CD_desc_data_CD_addr,
+       int CD_desc_data_CD_flags);
 
 int
-evt_trigger(spdid_t spdid,
-     long CD_desc_lookup_CD_evtid);
+mman_release_page(spdid_t spd,
+    vaddr_t CD_desc_lookup_CD_addr,
+    int flags);
 
 int
-evt_free(spdid_t spdid,
-  long CD_desc_lookup_CD_evtid);
+mman_revoke_page(spdid_t spd,
+   vaddr_t CD_desc_lookup_CD_addr,
+   int flags);
+
+typedef vaddr_t CD_desc_data_retval_CD_vaddr_t_CD_d_addr; CD_desc_data_retval_CD_vaddr_t_CD_d_addr
+__mman_alias_page(spdid_t spd,
+    vaddr_t CD_desc_lookup_CD_parent_desc_CD_addr,
+    u32_t CD_desc_data_CD_d_spd_flags,
+    vaddr_t CD_desc_data_CD_d_addr);

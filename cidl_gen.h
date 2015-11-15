@@ -40,15 +40,19 @@ struct global_info {
  	int desc_has_data;
  	int resc_has_data;
 };
-#define SERVICE         .service_name
+#define service			.service_name
 
-#define DESC_CLOSE      .desc_close
-#define DESC_DEP_CREATE .desc_dep_create
-#define DESC_DEP_CLOSE 	.desc_dep_close
-#define DESC_GLOBAL 	.desc_global
-#define DESC_BLOCK 	.desc_block
-#define DESC_HAS_DATA 	.desc_has_data
-#define RESC_HAS_DATA 	.resc_has_data
+#define desc_close_self_only    .desc_close_self_only
+#define desc_close_subtree      .desc_close_subtree
+#define desc_dep_create_diff	.desc_dep_create_diff
+#define desc_dep_create_same	.desc_dep_create_same
+#define desc_dep_create_none	.desc_dep_create_none
+#define desc_dep_close_removal 	.desc_dep_close_removal
+#define desc_dep_close_keep 	.desc_dep_close_keep
+#define desc_global		.desc_global
+#define desc_block		.desc_block
+#define desc_has_data		.desc_has_data
+#define resc_has_data		.resc_has_data
 
 #define service_global_info struct global_info sgi
 

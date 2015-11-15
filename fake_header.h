@@ -33,6 +33,10 @@ int tmp;
 #define cslab_alloc_evt_slab() NULL
 #define cslab_free_evt_slab(x) NULL
 
+#define sched_desc_maps tmp
+#define cslab_alloc_sched_slab() NULL
+#define cslab_free_sched_slab(x) NULL
+
 int hahalock = 10;
 #define evt_lock hahalock
 #define lock_take(x) 
@@ -40,6 +44,7 @@ int hahalock = 10;
 
 #define cos_map_add(x, y) 0
 #define cos_map_del(x, y) 0
+#define cos_map_init_static(x)
 
 #define cbuf_alloc(x, y) 0
 #define cbuf_free(x) 0
@@ -126,5 +131,9 @@ int cos_spd_id(){}
 
 int cbuf2buf(){}
 #include <string.h>
+
+#define ELOOP 0
+
+#define cos_get_thd_id() 0
 
 #endif /* _cos_fake_header_h */

@@ -14,6 +14,7 @@
 from pprint import pprint
 import subprocess, re, time
 from igraph import *
+import xml.etree.ElementTree as ET   # used for parsing xml-like code template
 
 IDL_ver = "IDL generated code ver 0.1"
 
@@ -59,313 +60,330 @@ def bench_code():
 ########################
 ##  blocks (interpret the code_template.c for generating blocks)
 ########################
-def build_blk_code(blknode, blkname):
-    tmp = blkname.lower()
-    blkstr = tmp.replace("_", "\_")
-    i = 1
-    while(i < 10):   # max 10 different (pred, code)
-        cmd = 'sed -nr \"/\<'+ blkstr +' pred '+str(i)+' start\>/{:a;n;/'\
-              '\<'+ blkstr +' pred '+str(i)+' end\>/b;p;ba} \" code_template.c'
-        p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-        pred, err = p.communicate() 
+def build_blk_code(cfblk, sfblk, gblk, marshallingblk, gblk_nonfunc):
+    tree = ET.parse('code_template.xml')
+    idl = tree.getroot()
+    #print (idl.tag)
+    for _interface in idl:
+        #print _interface.attrib["name"]
+        for _block in _interface:
+            #print _block.attrib["name"]
+            for _preds in _block:
+                #print _preds.attrib["name"]
+                preds = _preds.attrib["name"]
+                for _code in _preds:
+                    blknode = IDLBlock()
+                    #print(_code.text)
+                    code =_code.text
+                    blknode.add_blk(preds, code, _block.attrib["name"].upper())
+                    #blknode.show()
+                    if ("client" in _interface.attrib["name"]):
+                        if ("marshalling" in _preds.attrib["name"]):
+                            marshallingblk.append(blknode)
+                        elif ("creation"    in _preds.attrib["name"] or
+                            "transition"    in _preds.attrib["name"] or
+                            "terminal"      in _preds.attrib["name"] or
+                            "server_block"  in _preds.attrib["name"] or
+                            "server_wakeup" in _preds.attrib["name"]):
+                            cfblk.append(blknode)
+                        elif ("non_function" in _preds.attrib["name"]):
+                            gblk_nonfunc.append(blknode)
+                        else:
+                            gblk.append(blknode)
+                    elif ("server" in _interface.attrib["name"]):
+                        if ("marshalling" in _preds.attrib["name"]):
+                            marshallingblk.append(blknode)
+                        else:                        
+                            sfblk.append(blknode)
+    
+#===============================================================================
+# def block_cli_if_recover_upcall_entry():
+#     BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY, "BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY")
+#     printc (BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY       
+# 
+# def block_cli_if_recover_upcall_extern():
+#     BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN, "BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN")
+#     printc (BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN       
+#     
+# def block_cli_if_save_data():
+#     BLOCK_CLI_IF_SAVE_DATA = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_SAVE_DATA, "BLOCK_CLI_IF_SAVE_DATA")
+#     printc (BLOCK_CLI_IF_SAVE_DATA.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_SAVE_DATA       
+#     
+# def block_cli_if_recover_data():
+#     BLOCK_CLI_IF_RECOVER_DATA = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_DATA, "BLOCK_CLI_IF_RECOVER_DATA")
+#     printc (BLOCK_CLI_IF_RECOVER_DATA.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_DATA       
+#        
+# def block_cli_if_recover_init():
+#     BLOCK_CLI_IF_RECOVER_INIT = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_INIT, "BLOCK_CLI_IF_RECOVER_INIT")
+#     printc (BLOCK_CLI_IF_RECOVER_INIT.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_INIT        
+#        
+# def block_cli_if_track():
+#     BLOCK_CLI_IF_TRACK = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_TRACK, "BLOCK_CLI_IF_TRACK")
+#     printc (BLOCK_CLI_IF_TRACK.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_TRACK    
+# 
+# def block_cli_if_tracking_map_ds():
+#     BLOCK_CLI_IF_TRACKING_MAP_DS = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_DS, "BLOCK_CLI_IF_TRACKING_MAP_DS")
+#     printc (BLOCK_CLI_IF_TRACKING_MAP_DS.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_TRACKING_MAP_DS    
+# 
+# def block_cli_if_tracking_map_fn():
+#     BLOCK_CLI_IF_TRACKING_MAP_FN = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_FN, "BLOCK_CLI_IF_TRACKING_MAP_FN")
+#     printc (BLOCK_CLI_IF_TRACKING_MAP_FN.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_TRACKING_MAP_FN    
+# 
+# def block_cli_if_map_init():
+#     BLOCK_CLI_IF_MAP_INIT = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_MAP_INIT, "BLOCK_CLI_IF_MAP_INIT")
+#     printc (BLOCK_CLI_IF_MAP_INIT.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_MAP_INIT
+#             
+# def block_cli_if_recover_subtree():
+#     BLOCK_CLI_IF_RECOVER_SUBTREE = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_SUBTREE, "BLOCK_CLI_IF_RECOVER_SUBTREE")
+#     printc (BLOCK_CLI_IF_RECOVER_SUBTREE.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_SUBTREE    
+# 
+# def block_cli_if_recover_upcall():
+#     BLOCK_CLI_IF_RECOVER_UPCALL = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL, "BLOCK_CLI_IF_RECOVER_UPCALL")
+#     printc (BLOCK_CLI_IF_RECOVER_UPCALL.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER_UPCALL
+#     
+# def block_cli_if_basic_id():
+#     BLOCK_CLI_IF_BASIC_ID = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_BASIC_ID, "BLOCK_CLI_IF_BASIC_ID")
+#     printc (BLOCK_CLI_IF_BASIC_ID.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_BASIC_ID
+#             
+# def block_cli_if_recover():
+#     BLOCK_CLI_IF_RECOVER = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_RECOVER, "BLOCK_CLI_IF_RECOVER")
+#     printc (BLOCK_CLI_IF_RECOVER.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_RECOVER    
+# 
+# def block_cli_if_call_desc_update():
+#     BLOCK_CLI_IF_CALL_DESC_UPDATE = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_CALL_DESC_UPDATE, "BLOCK_CLI_IF_CALL_DESC_UPDATE")
+#     printc (BLOCK_CLI_IF_CALL_DESC_UPDATE.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_CALL_DESC_UPDATE    
+# 
+# def block_cli_if_invoke_ser_intro():
+#     BLOCK_CLI_IF_INVOKE_SER_INTRO = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_INVOKE_SER_INTRO, "BLOCK_CLI_IF_INVOKE_SER_INTRO")
+#     printc (BLOCK_CLI_IF_INVOKE_SER_INTRO.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_INVOKE_SER_INTRO
+# 
+# def block_cli_if_desc_update_pre():
+#     BLOCK_CLI_IF_DESC_UPDATE_PRE = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_PRE, "BLOCK_CLI_IF_DESC_UPDATE_PRE")
+#     printc (BLOCK_CLI_IF_DESC_UPDATE_PRE.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_DESC_UPDATE_PRE
+# 
+# def block_cli_if_desc_update_post_fault():
+#     BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT, "BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT")
+#     printc (BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT
+# 
+# def block_cli_if_invoke():
+#     BLOCK_CLI_IF_INVOKE = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_INVOKE, "BLOCK_CLI_IF_INVOKE")
+#     printc (BLOCK_CLI_IF_INVOKE.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_INVOKE
+# 
+# def block_cli_if_marshalling_invoke():
+#     BLOCK_CLI_IF_MARSHALLING_INVOKE = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_MARSHALLING_INVOKE, "BLOCK_CLI_IF_MARSHALLING_INVOKE")
+#     printc (BLOCK_CLI_IF_MARSHALLING_INVOKE.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_MARSHALLING_INVOKE
+# 
+# def block_ser_if_recreate_exist():
+#     BLOCK_SER_IF_RECREATE_EXIST = IDLBlock()    
+#     build_blk_code(BLOCK_SER_IF_RECREATE_EXIST, "BLOCK_SER_IF_RECREATE_EXIST")
+#     printc (BLOCK_SER_IF_RECREATE_EXIST.list)
+#     printc ("")
+#     return BLOCK_SER_IF_RECREATE_EXIST
+# 
+# def block_ser_if_upcall_creator():
+#     BLOCK_SER_IF_UPCALL_CREATOR = IDLBlock()    
+#     build_blk_code(BLOCK_SER_IF_UPCALL_CREATOR, "BLOCK_SER_IF_UPCALL_CREATOR")
+#     printc (BLOCK_SER_IF_UPCALL_CREATOR.list)
+#     printc ("")
+#     return BLOCK_SER_IF_UPCALL_CREATOR
+# 
+# def block_cli_if_upcall_creator():
+#     BLOCK_CLI_IF_UPCALL_CREATOR = IDLBlock()    
+#     build_blk_code(BLOCK_CLI_IF_UPCALL_CREATOR, "BLOCK_CLI_IF_UPCALL_CREATOR")
+#     printc (BLOCK_CLI_IF_UPCALL_CREATOR.list)
+#     printc ("")
+#     return BLOCK_CLI_IF_UPCALL_CREATOR
+# 
+# def block_ser_if_block_track():
+#     BLOCK_SER_IF_BLOCK_TRACK = IDLBlock()    
+#     build_blk_code(BLOCK_SER_IF_BLOCK_TRACK, "BLOCK_SER_IF_BLOCK_TRACK")
+#     printc (BLOCK_SER_IF_BLOCK_TRACK.list)
+#     printc ("")
+#     return BLOCK_SER_IF_BLOCK_TRACK
+# 
+# def block_ser_if_client_fault_notification():
+#     BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION = IDLBlock()    
+#     build_blk_code(BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION, "BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION")
+#     printc (BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION.list)
+#     printc ("")
+#     return BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION
+#===============================================================================
+
+#def read_from_template_code(IFcode):
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
+    #       '\<client sm end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["sm"] = code    
+    #===========================================================================
+    
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client sm_funptr start\>/{:a;n;/'\
+    #       '\<client sm_funptr end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["sm_funptr"] = code
+    #===========================================================================
         
-        #print (pred)
-        #pred = pred.replace("\\n\" \\", "\"")        # extract pred
-        if not pred:
-            break;
-        #pred = pred.replace('"', '').strip()        # remove "
-        #print(pred)
-        cmd = 'sed -nr \"/\<'+ blkstr +' '+str(i)+' start\>/{:a;n;/'\
-              '\<'+ blkstr +' '+str(i)+' end\>/b;p;ba} \" code_template.c'
-        p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-        code, err = p.communicate()
-        if not code:
-            break;
-        preds = pred.split()
-        #print (preds)
-        #print (code)        
-        if (preds == ['']):
-            blknode.add_blk([], code, blkname)
-        else:
-            blknode.add_blk(preds, code, blkname)    
-
-        i = i+1
-
-    cmd = 'sed -nr \"/\<'+ blkstr +' no match start\>/{:a;n;/'\
-          '\<'+ blkstr +' no match end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    #print (code)
-    pred = ["no match"]  
-    blknode.add_blk(pred, code, blkname)
-
-    cmd = 'sed -nr \"/\<'+ blkstr +' func pointer decl start\>/{:a;n;/'\
-          '\<'+ blkstr +' func pointer decl end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    #print (code)
-    pred = ["fnptr decl"]  
-    blknode.add_blk(pred, code, blkname)
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client track start\>/{:a;n;/'\
+    #       '\<client track end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["trackds"] = {"code" : code}
+    #===========================================================================
     
-    cmd = 'sed -nr \"/\<'+ blkstr +' func pointer start\>/{:a;n;/'\
-          '\<'+ blkstr +' func pointer end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    #print (code)
-    pred = ["fnptr"]  
-    blknode.add_blk(pred, code, blkname)
-
-def block_cli_if_recover_upcall_entry():
-    BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY, "BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY")
-    printc (BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_UPCALL_ENTRY       
-
-def block_cli_if_recover_upcall_extern():
-    BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN, "BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN")
-    printc (BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_UPCALL_EXTERN       
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
+    #       '\<client func decl end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()          
+    # IFcode["internalfn"] = code      
+    #===========================================================================
     
-def block_cli_if_save_data():
-    BLOCK_CLI_IF_SAVE_DATA = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_SAVE_DATA, "BLOCK_CLI_IF_SAVE_DATA")
-    printc (BLOCK_CLI_IF_SAVE_DATA.list)
-    printc ("")
-    return BLOCK_CLI_IF_SAVE_DATA       
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client cstub start\>/{:a;n;/'\
+    #       '\<client cstub end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["cstub"] = code
+    #===========================================================================
+
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client cstub no redo start\>/{:a;n;/'\
+    #       '\<client cstub no redo end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["cstub no redo"] = code
+    #===========================================================================
+
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client cstub marshalling start\>/{:a;n;/'\
+    #       '\<client cstub marshalling end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["marshalling cstub"] = code
+    #===========================================================================
+
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client state_fptr start\>/{:a;n;/'\
+    #       '\<client state_fptr end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["state_fptr"] = code    
+    # 
+    # cmd = 'sed -nr \"/\<client state_fptr_typedef start\>/{:a;n;/'\
+    #       '\<client state_fptr_typedef end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["state_fptr_typedef"] = code
+    #===========================================================================
     
-def block_cli_if_recover_data():
-    BLOCK_CLI_IF_RECOVER_DATA = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_DATA, "BLOCK_CLI_IF_RECOVER_DATA")
-    printc (BLOCK_CLI_IF_RECOVER_DATA.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_DATA       
-       
-def block_cli_if_recover_init():
-    BLOCK_CLI_IF_RECOVER_INIT = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_INIT, "BLOCK_CLI_IF_RECOVER_INIT")
-    printc (BLOCK_CLI_IF_RECOVER_INIT.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_INIT        
-       
-def block_cli_if_track():
-    BLOCK_CLI_IF_TRACK = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_TRACK, "BLOCK_CLI_IF_TRACK")
-    printc (BLOCK_CLI_IF_TRACK.list)
-    printc ("")
-    return BLOCK_CLI_IF_TRACK    
-
-def block_cli_if_tracking_map_ds():
-    BLOCK_CLI_IF_TRACKING_MAP_DS = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_DS, "BLOCK_CLI_IF_TRACKING_MAP_DS")
-    printc (BLOCK_CLI_IF_TRACKING_MAP_DS.list)
-    printc ("")
-    return BLOCK_CLI_IF_TRACKING_MAP_DS    
-
-def block_cli_if_tracking_map_fn():
-    BLOCK_CLI_IF_TRACKING_MAP_FN = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_TRACKING_MAP_FN, "BLOCK_CLI_IF_TRACKING_MAP_FN")
-    printc (BLOCK_CLI_IF_TRACKING_MAP_FN.list)
-    printc ("")
-    return BLOCK_CLI_IF_TRACKING_MAP_FN    
-
-def block_cli_if_map_init():
-    BLOCK_CLI_IF_MAP_INIT = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_MAP_INIT, "BLOCK_CLI_IF_MAP_INIT")
-    printc (BLOCK_CLI_IF_MAP_INIT.list)
-    printc ("")
-    return BLOCK_CLI_IF_MAP_INIT
-            
-def block_cli_if_recover_subtree():
-    BLOCK_CLI_IF_RECOVER_SUBTREE = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_SUBTREE, "BLOCK_CLI_IF_RECOVER_SUBTREE")
-    printc (BLOCK_CLI_IF_RECOVER_SUBTREE.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_SUBTREE    
-
-def block_cli_if_recover_upcall():
-    BLOCK_CLI_IF_RECOVER_UPCALL = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER_UPCALL, "BLOCK_CLI_IF_RECOVER_UPCALL")
-    printc (BLOCK_CLI_IF_RECOVER_UPCALL.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER_UPCALL
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<client state transition start\>/{:a;n;/'\
+    #       '\<client state transition end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["state_transition"] = code  
+    #===========================================================================
     
-def block_cli_if_basic_id():
-    BLOCK_CLI_IF_BASIC_ID = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_BASIC_ID, "BLOCK_CLI_IF_BASIC_ID")
-    printc (BLOCK_CLI_IF_BASIC_ID.list)
-    printc ("")
-    return BLOCK_CLI_IF_BASIC_ID
-            
-def block_cli_if_recover():
-    BLOCK_CLI_IF_RECOVER = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_RECOVER, "BLOCK_CLI_IF_RECOVER")
-    printc (BLOCK_CLI_IF_RECOVER.list)
-    printc ("")
-    return BLOCK_CLI_IF_RECOVER    
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<server track start\>/{:a;n;/'\
+    #       '\<server track end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["server"] = {"server_trackds" : {"code" : code}}
+    #===========================================================================
 
-def block_cli_if_invoke_ser_intro():
-    BLOCK_CLI_IF_INVOKE_SER_INTRO = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_INVOKE_SER_INTRO, "BLOCK_CLI_IF_INVOKE_SER_INTRO")
-    printc (BLOCK_CLI_IF_INVOKE_SER_INTRO.list)
-    printc ("")
-    return BLOCK_CLI_IF_INVOKE_SER_INTRO
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<server marshalling_invoke start\>/{:a;n;/'\
+    #       '\<server marshalling_invoke end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["marshalling server invoke fn"] = code
+    #===========================================================================
 
-def block_cli_if_desc_update_pre():
-    BLOCK_CLI_IF_DESC_UPDATE_PRE = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_PRE, "BLOCK_CLI_IF_DESC_UPDATE_PRE")
-    printc (BLOCK_CLI_IF_DESC_UPDATE_PRE.list)
-    printc ("")
-    return BLOCK_CLI_IF_DESC_UPDATE_PRE
-
-def block_cli_if_desc_update_post_fault():
-    BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT, "BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT")
-    printc (BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT.list)
-    printc ("")
-    return BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT
-
-def block_cli_if_invoke():
-    BLOCK_CLI_IF_INVOKE = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_INVOKE, "BLOCK_CLI_IF_INVOKE")
-    printc (BLOCK_CLI_IF_INVOKE.list)
-    printc ("")
-    return BLOCK_CLI_IF_INVOKE
-
-def block_cli_if_marshalling_invoke():
-    BLOCK_CLI_IF_MARSHALLING_INVOKE = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_MARSHALLING_INVOKE, "BLOCK_CLI_IF_MARSHALLING_INVOKE")
-    printc (BLOCK_CLI_IF_MARSHALLING_INVOKE.list)
-    printc ("")
-    return BLOCK_CLI_IF_MARSHALLING_INVOKE
-
-def block_ser_if_recreate_exist():
-    BLOCK_SER_IF_RECREATE_EXIST = IDLBlock()    
-    build_blk_code(BLOCK_SER_IF_RECREATE_EXIST, "BLOCK_SER_IF_RECREATE_EXIST")
-    printc (BLOCK_SER_IF_RECREATE_EXIST.list)
-    printc ("")
-    return BLOCK_SER_IF_RECREATE_EXIST
-
-def block_ser_if_upcall_creator():
-    BLOCK_SER_IF_UPCALL_CREATOR = IDLBlock()    
-    build_blk_code(BLOCK_SER_IF_UPCALL_CREATOR, "BLOCK_SER_IF_UPCALL_CREATOR")
-    printc (BLOCK_SER_IF_UPCALL_CREATOR.list)
-    printc ("")
-    return BLOCK_SER_IF_UPCALL_CREATOR
-
-def block_cli_if_upcall_creator():
-    BLOCK_CLI_IF_UPCALL_CREATOR = IDLBlock()    
-    build_blk_code(BLOCK_CLI_IF_UPCALL_CREATOR, "BLOCK_CLI_IF_UPCALL_CREATOR")
-    printc (BLOCK_CLI_IF_UPCALL_CREATOR.list)
-    printc ("")
-    return BLOCK_CLI_IF_UPCALL_CREATOR
-
-def block_ser_if_block_track():
-    BLOCK_SER_IF_BLOCK_TRACK = IDLBlock()    
-    build_blk_code(BLOCK_SER_IF_BLOCK_TRACK, "BLOCK_SER_IF_BLOCK_TRACK")
-    printc (BLOCK_SER_IF_BLOCK_TRACK.list)
-    printc ("")
-    return BLOCK_SER_IF_BLOCK_TRACK
-
-def block_ser_if_client_fault_notification():
-    BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION = IDLBlock()    
-    build_blk_code(BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION, "BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION")
-    printc (BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION.list)
-    printc ("")
-    return BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION
-
-def read_from_template_code(IFcode):
-    cmd = 'sed -nr \"/\<client sm start\>/{:a;n;/'\
-          '\<client sm end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["sm"] = code    
-    
-    cmd = 'sed -nr \"/\<client sm_funptr start\>/{:a;n;/'\
-          '\<client sm_funptr end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["sm_funptr"] = code
-        
-    cmd = 'sed -nr \"/\<client track start\>/{:a;n;/'\
-          '\<client track end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["trackds"] = {"code" : code}
-    
-    cmd = 'sed -nr \"/\<client func decl start\>/{:a;n;/'\
-          '\<client func decl end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()          
-    IFcode["internalfn"] = code      
-    
-    cmd = 'sed -nr \"/\<client cstub start\>/{:a;n;/'\
-          '\<client cstub end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["cstub"] = code
-
-    cmd = 'sed -nr \"/\<client cstub no redo start\>/{:a;n;/'\
-          '\<client cstub no redo end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["cstub no redo"] = code
-
-    cmd = 'sed -nr \"/\<client cstub marshalling start\>/{:a;n;/'\
-          '\<client cstub marshalling end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["marshalling cstub"] = code
-
-    cmd = 'sed -nr \"/\<client state_fptr start\>/{:a;n;/'\
-          '\<client state_fptr end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["state_fptr"] = code    
-    
-    cmd = 'sed -nr \"/\<client state_fptr_typedef start\>/{:a;n;/'\
-          '\<client state_fptr_typedef end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["state_fptr_typedef"] = code
-    
-    cmd = 'sed -nr \"/\<client state transition start\>/{:a;n;/'\
-          '\<client state transition end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["state_transition"] = code  
-    
-    cmd = 'sed -nr \"/\<server track start\>/{:a;n;/'\
-          '\<server track end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["server"] = {"server_trackds" : {"code" : code}}
-
-    cmd = 'sed -nr \"/\<server marshalling_invoke start\>/{:a;n;/'\
-          '\<server marshalling_invoke end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["marshalling server invoke fn"] = code
-
-    cmd = 'sed -nr \"/\<marshalling ds start\>/{:a;n;/'\
-          '\<marshalling ds end\>/b;p;ba} \" code_template.c'
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    code, err = p.communicate()
-    IFcode["marshalling ds"] = {"code" : code}
+    #===========================================================================
+    # cmd = 'sed -nr \"/\<marshalling ds start\>/{:a;n;/'\
+    #       '\<marshalling ds end\>/b;p;ba} \" code_template.c'
+    # p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+    # code, err = p.communicate()
+    # IFcode["marshalling ds"] = {"code" : code}
+    #===========================================================================
 
 
 def get_lock_function(IFcode, service_name):
-    composite_path = '/home/songjiguo/research/composite/src'    
-    cmd = 'find ' + composite_path + " -name " + service_name + ".c"
+    composite_path = '/home/songjiguo/research/composite/src'   
     
-    p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
-    path, err = p.communicate()
+    if (service_name != "sched"): 
+        cmd = 'find ' + composite_path + " -name " + service_name + ".c"
+        p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+        path, err = p.communicate()
+        
     if (service_name == "evt"):  
         for item in path.split("\n"):
             if ("_grp" in item): # hack for edge and edge_grp (start with this now)
                 path = item
+    elif (service_name == "sched"):
+        path = composite_path + "/components/implementation/"+service_name+"/cos_sched_base.c"
     else:
         path = path.split("\n")[0]  # there might be more than one file (e.g., evt.c)
 
@@ -374,6 +392,7 @@ def get_lock_function(IFcode, service_name):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["lock_take_func"] = code.replace("\\","")
+    exit()
 
     cmd = 'sed -nr \"/\<lock release start\>/{:a;n;/'\
           '\<lock release end\>/b;p;ba} \" ' + path
@@ -447,32 +466,7 @@ def init_func_info(func):
     func.info[func.desc_data_add]       = []
     func.info[func.resc_data_add]       = []
 
-#===============================================================================
-# def init_tuple_keyword(node):
-#     node.desc_close              = "desc_close"
-#     node.desc_dep_create         = "desc_dep_create"
-#     node.desc_dep_close          = "desc_dep_close"
-#     node.desc_global             = "desc_global"
-#     node.desc_block              = "desc_block" #--> in the form of (desc_block, T/F, [component])
-#     node.desc_has_data           = "desc_has_data"
-#     node.resc_has_data           = "resc_has_data"    
-#     node.sm_create               = "creation"
-#     node.sm_mutate               = "transition"
-#     node.sm_terminate            = "terminal"
-#===============================================================================
 
-#===============================================================================
-# def init_tuple_info(tup):
-#     tup.info[tup.desc_close]            = []
-#     tup.info[tup.desc_dep_create]       = []
-#     tup.info[tup.desc_dep_close]        = []
-#     tup.info[tup.desc_global]           = []
-#     tup.info[tup.desc_block]            = []
-#     tup.info[tup.desc_has_data]         = []
-#     tup.info[tup.resc_has_data]         = []
-#===============================================================================
-    
- 
  # draw the SM transtion with the faulty path
 def  draw_sm_transition(smg):
     #layout = smg.layout_circle()    
@@ -621,3 +615,63 @@ def printc(s):
 
 def repeat_to_length(string_to_expand, length):
    return (string_to_expand * ((length/len(string_to_expand))+1))[:length]
+
+
+
+#===============================================================================
+# def build_blk_code(blknode, blkname):
+#     tmp = blkname.lower()
+#     blkstr = tmp.replace("_", "\_")
+#     i = 1
+#     while(i < 10):   # max 10 different (pred, code)
+#         cmd = 'sed -nr \"/\<'+ blkstr +' pred '+str(i)+' start\>/{:a;n;/'\
+#               '\<'+ blkstr +' pred '+str(i)+' end\>/b;p;ba} \" code_template.c'
+#         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+#         pred, err = p.communicate() 
+#         
+#         #print (pred)
+#         #pred = pred.replace("\\n\" \\", "\"")        # extract pred
+#         if not pred:
+#             break;
+#         #pred = pred.replace('"', '').strip()        # remove "
+#         #print(pred)
+#         cmd = 'sed -nr \"/\<'+ blkstr +' '+str(i)+' start\>/{:a;n;/'\
+#               '\<'+ blkstr +' '+str(i)+' end\>/b;p;ba} \" code_template.c'
+#         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+#         code, err = p.communicate()
+#         if not code:
+#             break;
+#         preds = pred.split()
+#         #print (preds)
+#         #print (code)        
+#         if (preds == ['']):
+#             blknode.add_blk([], code, blkname)
+#         else:
+#             blknode.add_blk(preds, code, blkname)    
+# 
+#         i = i+1
+# 
+#     cmd = 'sed -nr \"/\<'+ blkstr +' no match start\>/{:a;n;/'\
+#           '\<'+ blkstr +' no match end\>/b;p;ba} \" code_template.c'
+#     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+#     code, err = p.communicate()
+#     #print (code)
+#     pred = ["no match"]  
+#     blknode.add_blk(pred, code, blkname)
+# 
+#     cmd = 'sed -nr \"/\<'+ blkstr +' func pointer decl start\>/{:a;n;/'\
+#           '\<'+ blkstr +' func pointer decl end\>/b;p;ba} \" code_template.c'
+#     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+#     code, err = p.communicate()
+#     #print (code)
+#     pred = ["fnptr decl"]  
+#     blknode.add_blk(pred, code, blkname)
+#     
+#     cmd = 'sed -nr \"/\<'+ blkstr +' func pointer start\>/{:a;n;/'\
+#           '\<'+ blkstr +' func pointer end\>/b;p;ba} \" code_template.c'
+#     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
+#     code, err = p.communicate()
+#     #print (code)
+#     pred = ["fnptr"]  
+#     blknode.add_blk(pred, code, blkname)
+#===============================================================================

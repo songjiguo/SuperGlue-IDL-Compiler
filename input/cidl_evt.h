@@ -4,14 +4,15 @@
 #include "cidl_gen.h"
 
 service_global_info = {
-	SERVICE		= evt,
-        DESC_CLOSE      = itself,
-        DESC_DEP_CREATE = same,
-        DESC_DEP_CLOSE 	= removal,
-        DESC_GLOBAL 	= true,
-        DESC_BLOCK 	= true,
-        DESC_HAS_DATA 	= true,
-        RESC_HAS_DATA 	= false,
+	service		       = evt,
+
+        desc_close_self_only   = true,
+        desc_dep_create_same   = true,
+        desc_dep_close_removal = true,
+        desc_global	       = true,
+        desc_block	       = true,
+        desc_has_data	       = true,
+        resc_has_data	       = false,
 };
 
 sm_creation(evt_split);
@@ -21,6 +22,7 @@ sm_transition(evt_trigger, evt_wait);
 sm_transition(evt_trigger, evt_free);
 sm_transition(evt_split, evt_free);
 sm_terminal(evt_free);
+
 sm_block(evt_wait);
 sm_wakeup(evt_trigger);
 

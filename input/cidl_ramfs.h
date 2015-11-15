@@ -4,14 +4,15 @@
 #include "cidl_gen.h"
 
 service_global_info = {
-	SERVICE		= ramfs,
-        DESC_CLOSE      = itself,
-        DESC_DEP_CREATE = same,
-        DESC_DEP_CLOSE 	= keep,
-        DESC_GLOBAL 	= false,
-        DESC_BLOCK 	= true,
-        DESC_HAS_DATA 	= true,
-        RESC_HAS_DATA 	= true,
+	service		     = ramfs,
+
+        desc_close_self_only = true,
+        desc_dep_create_same = true,
+        desc_dep_close_keep  = true,
+        desc_global	     = false,
+        desc_block	     = false,
+        desc_has_data	     = true,
+        resc_has_data	     = true,
 };
 
 sm_creation(tsplit);

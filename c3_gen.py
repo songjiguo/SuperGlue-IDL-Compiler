@@ -14,6 +14,9 @@ from pprint import pprint
 import keywords, sys, os, re, time
 from igraph import *
 
+# use this to manage condition evaluation
+from pyparsing import infixNotation, opAssoc, Keyword, Word, alphas  # @UnresolvedImport
+
 import c3_parser
 
 using_main = 1
@@ -69,6 +72,83 @@ class BlockCode(object):
     def show_code(self):
         print (self.block_code)
 
+# define classes to be built at parse time, as each matching
+# expression type is parsed
+class BoolOperand(object):
+    def __init__(self,t):
+        self.label = t[0]
+        self.value = eval(t[0])
+    def __bool__(self):
+        return self.value
+    def __str__(self):
+        return self.label
+    __repr__ = __str__
+    __nonzero__ = __bool__
+
+class BoolBinOp(object):
+    def __init__(self,t):
+        self.args = t[0][0::2]
+    def __str__(self):
+        sep = " %s " % self.reprsymbol
+        return "(" + sep.join(map(str,self.args)) + ")"
+    def __bool__(self):
+        return self.evalop(bool(a) for a in self.args)
+    __nonzero__ = __bool__
+    __repr__ = __str__
+
+class BoolAnd(BoolBinOp):
+    reprsymbol = '&'
+    evalop = all
+
+class BoolOr(BoolBinOp):
+    reprsymbol = '|'
+    evalop = any
+
+class BoolNot(object):
+    def __init__(self,t):
+        self.arg = t[0][1]
+    def __bool__(self):
+        v = bool(self.arg)
+        return not v
+    def __str__(self):
+        return "~" + str(self.arg)
+    __repr__ = __str__
+    __nonzero__ = __bool__
+
+TRUE = Keyword("True")
+FALSE = Keyword("False")
+boolOperand = TRUE | FALSE | Word(alphas,max=1)
+boolOperand.setParseAction(BoolOperand)
+
+# define expression, based on expression operand and
+# list of operations in precedence order
+boolExpr = infixNotation( boolOperand,
+    [
+    ("not", 1, opAssoc.RIGHT, BoolNot),
+    ("and", 2, opAssoc.LEFT,  BoolAnd),
+    ("or",  2, opAssoc.LEFT,  BoolOr),
+    ])
+
+desc_close_self_only      = False
+desc_close_subtree     = False
+desc_dep_create_none   = False
+desc_dep_create_diff   = False
+desc_dep_create_same   = False
+desc_dep_close_removal = False
+desc_dep_close_keep    = False
+desc_global            = False
+desc_block             = False
+resc_has_data          = False
+desc_has_data          = False
+creation               = False
+transition             = False
+terminal               = False
+server_block           = False
+server_wakeup          = False
+
+non_function           = True  # alwasy appear
+marshalling            = False # no marshalling by default
+
 #===============================================================================
 #
 #  EXTRACT THE INFO AND CONSTRUCT THE CODE BLOCKS
@@ -76,42 +156,89 @@ class BlockCode(object):
 #===============================================================================
 #===============================================================================
 #  block is in the form of (predicate, code, blk name)
-#  gdescp is in the form of ['desc_close_itself', 'desc_global_global', ...]
+#  gdescp is in the form of ['desc_close_self_only', 'desc_global_global', ...]
 #  fdescp is in the form of [function name, normalPara, sm_state, idlRet, idlPara]
-#===============================================================================   
+#===============================================================================
+def init_cond_table(gdescp, fdescp):
+    global desc_close_self_only, desc_close_subtree, desc_dep_create_none, desc_dep_create_diff, desc_block;
+    global desc_dep_create_same, desc_dep_close_removal, desc_dep_close_keep, desc_global, marshalling
+    global server_wakeup, server_block, resc_has_data, desc_has_data, creation,transition, terminal 
+    if (1):
+        desc_close_self_only    = "desc_close_self_only"   in gdescp
+        desc_close_subtree      = "desc_close_subtree"     in gdescp
+        desc_dep_create_none    = "desc_dep_create_none"   in gdescp
+        desc_dep_create_diff    = "desc_dep_create_diff"   in gdescp
+        desc_dep_create_same    = "desc_dep_create_same"   in gdescp
+        desc_dep_close_removal  = "desc_dep_close_removal" in gdescp
+        desc_dep_close_keep     = "desc_dep_close_keep"    in gdescp
+        desc_global             = "desc_global"            in gdescp
+        desc_block              = "desc_block"             in gdescp
+        resc_has_data           = "resc_has_data"          in gdescp
+        desc_has_data           = "desc_has_data"          in gdescp
+    
+    if (fdescp):
+        creation        = "creation"        in fdescp[2]
+        transition      = "transition"      in fdescp[2]
+        terminal        = "terminal"        in fdescp[2]
+        server_block    = "server_block"    in fdescp[5]  # see the generate_description
+        server_wakeup   = "server_wakeup"   in fdescp[5]
+    
+    if (gdescp == "marshalling" and fdescp is None):
+        marshalling = True
+   
 def condition_eval(block, (gdescp, fdescp)):
     IFCode = ""
     IFBlkName = ""
+    
+    init_cond_table(gdescp, fdescp)
+    #pprint(gdescp)
+    #pprint(fdescp)
+    #print(desc_close_self_only & desc_close_subtree)
     
     list_descp = list(traverse(gdescp)) + list(traverse(fdescp))
     find_any = False
     #print(list(traverse(gdescp)))
     #print(block.list)
+    # blk[0] is the predicate
     for blk in block.list:
-        #print(blk)
-        list_blks = []
-        __list_blks = list(traverse(blk[0]))
-        for item in __list_blks:
-            list_blks = list_blks + item.split("&") 
-        match = 0;
-        #print(list_blks)
-        for pred in list_blks:
-            #print(pred)
-            for desc in list_descp:
-                if (desc and desc in pred):
-                    match = match + 1;
-
-        if (match == len(list_blks)):
-            IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
+        #print(blk[0])
+        #print(eval(blk[0]))
+        if (eval(blk[0])):
+            IFCode = blk[1]
             IFBlkName = blk[2]
-            find_any = True
-            break;  # stop once we have found a match TODO: check the consistency
-
-    if (find_any is False):
-        for blk in block.list:
-            if (blk[0][0] == "no match"):
-                return (blk[0][0], blk[1])
+            #print(IFBlkName)
+            #print(IFCode)
+        
+#===============================================================================
+#         list_blks = []
+#         __list_blks = list(traverse(blk[0]))
+#         for item in __list_blks:
+#             list_blks = list_blks + item.split("&") 
+#         match = 0;
+#         #print(list_blks)
+#         for pred in list_blks:
+#             #print(pred)
+#             for desc in list_descp:
+#                 if (desc and desc in pred):
+#                     match = match + 1;
+# 
+#         if (match == len(list_blks)):
+#             IFCode = blk[1] + block.list[-1][1]   # last(pred, code) -- [-1][1] is for function pointer
+#             IFBlkName = blk[2]
+#             find_any = True
+#             break;  # stop once we have found a match TODO: check the consistency
+# 
+#     if (find_any is False):
+#         for blk in block.list:
+#             if (blk[0][0] == "no match"):
+#                 return (blk[0][0], blk[1])
+#===============================================================================
     return (IFBlkName, IFCode)
+
+def extrac_funcdecl_from_func(code):
+    func_decl = code.lstrip().splitlines()[0]
+    func_decl = func_decl[:func_decl.rfind("{")] + ";\n"
+    return func_decl
         
 def traverse(o, tree_types=(list, tuple)):
     if isinstance(o, tree_types):
@@ -134,8 +261,9 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
     
     if (fdesc[2] != "creation"):
         server_id_param = subIFcode["parameters"]["params"]
-        server_id_param = server_id_param.replace(IFcode["trackds"]["desc_id"][1], \
-                                                    "desc->server_" + IFcode["trackds"]["desc_id"][1])
+        if ("desc_id" in IFcode["trackds"]):
+            server_id_param = server_id_param.replace(IFcode["trackds"]["desc_id"][1], \
+                                                      "desc->server_" + IFcode["trackds"]["desc_id"][1])
         code = code.replace("IDL_server_id_params", server_id_param)
 
     for tup in result.tuple:
@@ -147,13 +275,16 @@ def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl
 
 def generate_globalvas(result, IFcode):
     IFcode["s_stub.S"] = []
-    keywords.get_lock_function(IFcode, keywords.service_name)
-    
+    if (keywords.service_name != "mem_mgr"):  # mm does not block
+        keywords.get_lock_function(IFcode, keywords.service_name)
+
     global final_id, final_parent_id
 
+    # set up the tracking strcuture
+    IFcode["trackds"] = {"code":  IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STRUCT"]}
     code = IFcode["trackds"]["code"]
     IFcode["trackds"] = {"fields":[]}
-   
+
     tmp = "\n" + code.split()[0] + " " + code.split()[1] + " { \n"
     for item in result.gvars["desc_data"]:
         tmp = tmp + "    " + " ".join(item) + ";\n"
@@ -174,7 +305,6 @@ def generate_globalvas(result, IFcode):
         tmp = tmp + " ".join(item) + ", "
         IFcode["trackds"]["fields"].append(item[1])
     code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
-    
     # internal function files
     #code = r'''#include "cidl_gen.h"''' + "\n" + code 
     
@@ -183,17 +313,19 @@ def generate_globalvas(result, IFcode):
     if ("parent id" in result.gvars):
         IFcode["trackds"]["desc_parent id"] = result.gvars["parent id"]
     IFcode["trackds"]["code"] = code
-    
-    final_id = IFcode["trackds"]["desc_id"][1]
+
+    if ("desc_id" in IFcode["trackds"]):
+        final_id = IFcode["trackds"]["desc_id"][1]
     if ("desc_parent id" in IFcode["trackds"]):
         final_parent_id = IFcode["trackds"]["desc_parent id"][1]
 
-def generate_gblocks(result, globalblocks, IFDesc, IFcode):
+def generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode):
     # the global blocks
     IFcode["internalfn_decl"] = ""
     IFcode["extern"] = "" 
     IFcode["mapping ds"] = ""
     IFcode["mapping fn"] = ""
+    IFcode["desc_con"] = ""
     no_match_code_list = []
     
     if (globalblocks):
@@ -201,17 +333,8 @@ def generate_gblocks(result, globalblocks, IFDesc, IFcode):
         for gblk in globalblocks:
             #print (gblk.list)
             name, code= condition_eval(gblk, (IFDesc[0], None))
-            
-            if (name == "no match"):   # empty body
-                #print(code)
-                if (code not in no_match_code_list):
-                    no_match_code_list.append(code)
-            
             if (name and code):    # there should be any params, otherwise it should be function
                 #print(name)
-                #if (name == "BLOCK_CLI_IF_BASIC_ID"):
-                #    print(name)
-                #    print(code)
                 #print(code)
                 # now write out static function skeleton
                 if ("extern" in code):
@@ -220,30 +343,52 @@ def generate_gblocks(result, globalblocks, IFDesc, IFcode):
                     IFcode["mapping ds"] = IFcode["mapping ds"] + code
                 elif ("cvect_lookup" in code or "cos_map_lookup" in code):  # global tracking mapping fn
                     IFcode["mapping fn"] = IFcode["mapping fn"] + code
+                #elif (name == "BLOCK_CLI_IF_CSTUB"):
+                #    IFcode["cstub"] = IFcode["cstub"] + code
                 else:    
-                    __IFcode[name] = code   
-                    IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + \
-                                                code.split('\n', 1)[0][:-2]+";" + "\n"
-                    #print(code)
-                    #print(code.split('\n', 1)[0][:-2]+";" + "\n")
+                    __IFcode[name] = code
+                    if (name == "BLOCK_CLI_IF_DESC_CONS"):
+                        continue # do this in the init creation function
+                    IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + extrac_funcdecl_from_func(code)
     IFcode["global"] = __IFcode
-    IFcode["global"]["no match"] =  ''.join(no_match_code_list)
-
-def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
-    if (ser_funcblocks):
-        IFcode["server"]["server_code"] = {}
-        for serblk in ser_funcblocks:
-            #print (serblk.list)
-            name, code= condition_eval(serblk, (IFDesc[0], None))
+    
+    if (global_nonfun_blocks):
+        __IFcode = {}
+        for gblk_nonfunc in global_nonfun_blocks:
+            name, code= condition_eval(gblk_nonfunc, (IFDesc[0], None))
             if (name and code):    # there should be any params, otherwise it should be function
                 #print(name)
                 #print(code)
-                IFcode["server"]["server_code"][name] = code
+                # now write out static function skeleton
+                __IFcode[name] = code
+
+    IFcode["global_non_function"] = __IFcode
+    #pprint(IFcode["global_non_function"])
+    #exit()
+
+def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
+    if (ser_funcblocks):
+        IFcode["server"] = {}
+        IFcode["server"]["server_code"] = {}
+        IFcode["server"]["server_trackds"] = {"code":""}
+        for serblk in ser_funcblocks:
+            #print(serblk.show())
+            name, code= condition_eval(serblk, (IFDesc[0], None))
+            #pprint(IFDesc[0])
+            if (name and code):    # there should be any params, otherwise it should be function
+                #print(name)
+                #print(code)
+                if (name == "BLOCK_SER_IF_TRACK_DS"):
+                    IFcode["server"]["server_trackds"]["code"] = code
+                else:
+                    IFcode["server"]["server_code"][name] = code
     for k, v in result.tuple[0].ser_block_track.iteritems():
-            IFcode["server"][k] = v
+        IFcode["server"][k] = v
 
 # initial creation -- starting point in SM transition, treat this specially            
 def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
+    
+    pprint(IFcode)
     code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
     code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
     code = code.replace("IDL_fname", fdesc[0])
@@ -254,7 +399,8 @@ def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
     #subIFcode["cstub_fn"] = code
     
     # desc_cons
-    code = IFcode["internalfn"]
+    #print(IFcode['global']["BLOCK_CLI_IF_DESC_CONS"])
+    code = IFcode['global']["BLOCK_CLI_IF_DESC_CONS"]
     tmp = ""
     for f, b in zip(subIFcode["parameters"]["desc_params"].split(","), 
                     subIFcode["parameters"]["params"].split(", ")):
@@ -263,6 +409,7 @@ def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
                   marshall_cp[1] +");"+ ";\n"
             continue
         tmp = tmp + f + "=" + b + ";\n"
+    
     # treat the marshalled params differently (save parameterusing maloc)  
     # assume only one data being passed per invocation  
     # if (marshall_cp):
@@ -270,7 +417,10 @@ def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
         
     code = code.replace("IDL_parsdecl", subIFcode["parameters"]["params_decl"])
     code = code.replace("IDL_desc_cons;", tmp)
-    IFcode["internalfn"] = code
+    IFcode['global']["BLOCK_CLI_IF_DESC_CONS"] = code
+    
+    # write out the declaration
+    IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + extrac_funcdecl_from_func(code)
 
 def bench_mark(code, fname):
     if (keywords.bench == False):
@@ -289,13 +439,14 @@ def bench_mark(code, fname):
 # 1) more than 4 parameters (Composite passes up to 4 parameters)
 # 2) passing pointer, and which is not "__retval" type
 # 3) more than 1 return val
-def marshalling(result, fdesc, subIFcode, IFcode):
+def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblocks):
+    
     global marshalling_flag
     subIFcode["marshall fn"] = []
     marshall_cp = []
     param_list = subIFcode["parameters"]["params"].split(", ")
     paramdecl_list = subIFcode["parameters"]["params_decl"].split(", ")
-
+    
     cond_1 = (len(param_list) > max_params)
     cond_2 = ("*" in ', '.join(paramdecl_list))
     cond_3 = False
@@ -304,22 +455,13 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         if ("*" in item and "_retval" in item):
             ret_num += 1
             cond_3 = 1  # need treat this differently (multiple rets)
-    #===========================================================================
-    # if (cond_2):
-    #     num = len(param_list)
-    #     for item in paramdecl_list:
-    #         if ("*" not in item or "_retval" in item):
-    #             num -= 1
-    #     cond_2 *= num  # if there is any pointer to pass, and not __retval, set num must be none 0
-    #===========================================================================
-    
     # when either condition is met, we do the marshalling here
     if ((cond_1 or cond_2) and not cond_3):
         #print(param_list)
         #print(paramdecl_list)
         #print(fdesc[0])
         marshalling_flag = True
-        
+
         tmp_cons = ""
         tmp_decl = ""
         for item in paramdecl_list:
@@ -340,22 +482,27 @@ def marshalling(result, fdesc, subIFcode, IFcode):
             ## this is the data copy before passing by cbuf
             marshalling_cons = marshalling_cons + ";\nmemcpy(&md->data[0], " + marshall_cp[0] + ", " + \
                                            marshall_cp[1] + " + 1)";
-
-        marshalling_ds   = IFcode["marshalling ds"]["code"]
-        marshalling_ds = marshalling_ds.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
-        
-        marshalling_code = IFcode["marshalling cstub"]        
+                                           
+                                        
+        IFcode["marshalling"] = {}
+        for mblock in marshall_funcblocks:
+            name, code = condition_eval(mblock, ("marshalling", None))
+            if (name and code):
+                IFcode["marshalling"][name] = code
+                
+        marshalling_ds   = IFcode["marshalling"]["BLOCK_STRUCT_MARSHALLING"]
+        marshalling_ds = marshalling_ds.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)        
+        marshalling_code = IFcode["marshalling"]["BLOCK_CLI_IF_CSTUB_MARSHALLING"]        
         cstub_code = marshalling_code
         cstub_code = cstub_code.replace("IDL_marshalling_cons", marshalling_cons)                     
         cstub_code = cstub_code.replace("IDL_from_spd", param_list[0])
         if (len_var):
-            cstub_code = cstub_code.replace("IDL_data_len", len_var)
-        
-        inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] 
+            cstub_code = cstub_code.replace("IDL_data_len", len_var)        
+        inkcode = IFcode["marshalling"]["BLOCK_CLI_IF_INVOKE_MARSHALLING"] 
         inkcode = inkcode.replace("IDL_marshalling_cons", marshalling_cons)                    
         inkcode = inkcode.replace("IDL_marshalling_parsdecl", marshalling_parsdecl)
         inkcode = inkcode.replace("IDL_from_spd", param_list[0])       
-        subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
+        #IFcode["marshalling"]["BLOCK_CLI_IF_INVOKE_MARSHALLING"] = "" # ignore this in the final code
         
         # prepare for s_stub.S
         tmp = IFcode["s_stub.S"]
@@ -363,7 +510,8 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         IFcode["s_stub.S"] = tmp
         
         # prepare for marshalled server fn
-        marshalling_server_fn = IFcode["marshalling server invoke fn"]        
+        #pprint(IFcode["marshalling"])
+        marshalling_server_fn = IFcode["marshalling"]["BLOCK_SER_IF_INVOKE_MARSHALLING"]
         unpacked_pars = []
         # here we compute the space for each passed in data
         offset = "0"
@@ -378,39 +526,36 @@ def marshalling(result, fdesc, subIFcode, IFcode):
                                                               ", ".join(unpacked_pars))
         marshalling_server_fn = marshalling_server_fn.replace("IDL_decl_from_spd", paramdecl_list[0])
         subIFcode["marshall fn"] = marshalling_server_fn
-        
     else:
-        tmp = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"].split('\n', 1)[0][:-2]+";"
-        IFcode["internalfn_decl"] = IFcode["internalfn_decl"].replace(tmp, "") # remove the static declaration
-        subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
-        subIFcode["marshall ds"] = ""
+        #tmp = subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"].split('\n', 1)[0][:-2]+";"
+        #IFcode["internalfn_decl"] = IFcode["internalfn_decl"].replace(tmp, "") # remove the static declaration
+        #subIFcode["blocks"]["BLOCK_CLI_IF_MARSHALLING_INVOKE"] = "" # ignore this in the final code
+        #subIFcode["marshall ds"] = ""
         
-        cstub_code = IFcode["cstub"]
         # the wake up function no need to redo, since 
         # 1) the fault has removed the data structure, and
         # 2) reflection has woken up the "blocked" threads, 
         #    which is supposed done by the wake up function anyway 
-        #if (("block" in IFcode["server"] and fdesc[0] == IFcode["server"]["block"]) or
-        #    ("wakeup" in IFcode["server"] and fdesc[0] == IFcode["server"]["wakeup"])):
-        #    cstub_code = IFcode["cstub no redo"]   # overwrite the cstub_code here for block/wakeup function
-            
+        cstub_code = subIFcode["blocks"]["BLOCK_CLI_IF_CSTUB"]
         inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
         marshalling_ds = ""
 
     # marshalling
     subIFcode["cstub_fn"] = replace_params(result, fdesc, cstub_code, IFcode, 
                                            subIFcode, param_list, paramdecl_list)
-
     # for benchmark only
     subIFcode["cstub_fn"] = bench_mark(subIFcode["cstub_fn"], fdesc[0])
     
+ 
     subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = replace_params(result, fdesc, inkcode, IFcode,
                                                  subIFcode, param_list, paramdecl_list)
+    
     subIFcode["marshall ds"] = replace_params(result, fdesc, marshalling_ds, IFcode, 
                                                  subIFcode, param_list, paramdecl_list)
     if (fdesc[2] == "creation"):
         init_creation(fdesc, subIFcode, IFcode, marshall_cp)
 
+    #print(subIFcode["cstub_fn"])
     code = subIFcode["cstub_fn"]
     if (final_id in param_list):
         code = code.replace("IDL_id", final_id)
@@ -423,6 +568,8 @@ def marshalling(result, fdesc, subIFcode, IFcode):
     #print(code)
         
     subIFcode["cstub_fn"] = code
+    #print(subIFcode["cstub_fn"])
+    #exit()
 #===============================================================================
 #     print(final_id)    
 #     print(final_parent_id) 
@@ -443,10 +590,10 @@ def marshalling(result, fdesc, subIFcode, IFcode):
         subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = tmp
     #print(subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"])        
 
-def generate_fblocks(result, funcblocks, IFDesc, IFcode):
+def generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks):
     #no_match_code_list = []
-    
     tmp_s_stubS = []
+
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
         subIFcode, subIFcode["parameters"],subIFcode["blocks"], subIFcode["state"] = ({} for i in range(4)) 
@@ -463,33 +610,29 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode):
             if (param_list[i] in IFcode["trackds"]["fields"]):
                 paramdesc_list[i] = "desc->"+ param_list[i]
         subIFcode["parameters"]["desc_params"] = ', '.join(paramdesc_list)
-        #print(subIFcode["parameters"]["desc_params"])
         
         for fblk in funcblocks:
             #fblk.show()
-            name, code = condition_eval(fblk, (IFDesc[0], fdesc)) 
+            name, code = condition_eval(fblk, (IFDesc[0], fdesc))
             code = replace_params(result, fdesc, code, IFcode, 
                                   subIFcode, param_list, paramdecl_list)
-            
-            if (name == "no match"):   # empty body
-                #print(code)
-                #if (code not in no_match_code_list):
-                #    no_match_code_list.append(code)
-                continue;
-            
             if (name and code):
-                subIFcode["blocks"][name] = code
-                # now write out static function declarations!!!
-                IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + code.split('\n', 1)[0][:-2]+";" + "\n"
-
+                subIFcode["blocks"][name] = code                
+                if (name != "BLOCK_CLI_IF_CSTUB"):  # cstub_fn is not normal function, no decl for it
+                    # now write out static function declarations!!!
+                    IFcode["internalfn_decl"] = IFcode["internalfn_decl"] + extrac_funcdecl_from_func(code)
+            
         code = "IDL_fname(IDL_desc_saved_params)" # add this function to the edge later
         subIFcode["state"]["state_fn"] = replace_params(result, fdesc, code, IFcode, 
                                                         subIFcode, param_list, paramdecl_list)
-        marshalling(result, fdesc, subIFcode, IFcode)
+        
+        # decide the invocation code -- "cstub_fn and block_cli_if_invoke"
+        # this is because some service might need marshalling
+        construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblocks)
 
         IFcode[fdesc[0]] = subIFcode
         
-        #print(IFcode[fdesc[0]])
+        #pprint(IFcode[fdesc[0]])
     #pprint (IFcode)
     #exit()
     # this is the non-match list and should be empty static inline function ?? why need this?
@@ -502,65 +645,91 @@ def generate_description(result, funcdescps, globaldescp):
     for tup in result.tuple:
         keywords.init_service_name(result.gvars["global_info"]["service_name"])
         for key, value in tup.info.iteritems():
-            globaldescp.append(key+"_"+value)
+            if (value == "true"):    # only extract the true item
+                globaldescp.append(key)
 
-        # in order to generate server side block tracking and wake up code
-        for key, value in tup.ser_block_track.iteritems():
-            globaldescp.append(key)
-            
+        #=======================================================================
+        # # in order to generate server side block tracking and wake up code
+        # for key, value in tup.ser_block_track.iteritems():
+        #     print(value)
+        #     globaldescp.append(key)
+        # pprint(globaldescp)
+        #=======================================================================
+        
         for func in tup.functions:
             normalPara = func.normal_para
             idlRet  = []
-            idlPara = []
+            idlPara = []            
+            block_or_wakeup = ""
             for key, value in func.info.iteritems():
                 if (key == func.name or key == func.sm_state): # skip function name and state (only IDL stuff) 
                     continue
                 elif (value and key is not func.desc_data_retval):
                     idlPara.append((key, value))
+                elif (func.info[func.name] in tup.ser_block_track.values()):
+                    block_or_wakeup = [k for k, v in tup.ser_block_track.iteritems() if v == func.info[func.name]][0]
                 else:
                     (value and key is func.desc_data_retval)
                     idlRet.append((key, value))
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
-                       func.info[func.sm_state], idlRet, idlPara)
-            funcdescps.append(perFunc) 
+                       func.info[func.sm_state], idlRet, idlPara, block_or_wakeup)
+            funcdescps.append(perFunc)
+       #pprint(funcdescps)
             
 #  init blocks of (predicate, code) 
-def init_blocks(globalblocks, funcblocks, ser_funcblocks):
-    gblk, fblk, ser_fblk = ([] for i in range(3))
+def init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, global_nonfun_blocks):
+    gblk, gblk_nonfunc, cfblk, sfblk, marshallingblk = ([] for i in range(5))
     
-    fblk.append(keywords.block_cli_if_invoke())
-    fblk.append(keywords.block_cli_if_marshalling_invoke()) # marshalling version
-    fblk.append(keywords.block_cli_if_desc_update_pre())
-    fblk.append(keywords.block_cli_if_desc_update_post_fault())
-    fblk.append(keywords.block_cli_if_invoke_ser_intro())
-    fblk.append(keywords.block_cli_if_recover_subtree())
-    fblk.append(keywords.block_cli_if_track())  
-    fblk.append(keywords.block_cli_if_recover_init())
-    
-    gblk.append(keywords.block_cli_if_map_init())
-    gblk.append(keywords.block_cli_if_tracking_map_ds())
-    gblk.append(keywords.block_cli_if_tracking_map_fn())
-    gblk.append(keywords.block_cli_if_upcall_creator())
-    gblk.append(keywords.block_cli_if_recover())
-    gblk.append(keywords.block_cli_if_basic_id()) 
-    gblk.append(keywords.block_cli_if_recover_upcall())
-    gblk.append(keywords.block_cli_if_recover_upcall_extern())  
-    gblk.append(keywords.block_cli_if_recover_upcall_entry())  
-    gblk.append(keywords.block_cli_if_recover_data())
-    gblk.append(keywords.block_cli_if_save_data())
-
-    ser_fblk.append(keywords.block_ser_if_recreate_exist())
-    ser_fblk.append(keywords.block_ser_if_upcall_creator())    
-    ser_fblk.append(keywords.block_ser_if_block_track())
-    ser_fblk.append(keywords.block_ser_if_client_fault_notification())
+    keywords.build_blk_code(cfblk, sfblk, gblk, marshallingblk, gblk_nonfunc)
+    # ==============================
+    # 
+    # fblk.append(keywords.build_fblk_code())
+    # ser_fblk.append(keywords.build_ser_fblk_code())
+    # gblk.append(keywords.build_gblk_code())
+    #===========================================================================
+        
+#===============================================================================
+#     fblk.append(keywords.block_cli_if_invoke())
+#     
+#     exit()
+#     fblk.append(keywords.block_cli_if_marshalling_invoke()) # marshalling version
+#     fblk.append(keywords.block_cli_if_desc_update_pre())
+#     fblk.append(keywords.block_cli_if_desc_update_post_fault())
+#     fblk.append(keywords.block_cli_if_invoke_ser_intro())
+#     fblk.append(keywords.block_cli_if_recover_subtree())
+#     fblk.append(keywords.block_cli_if_track())  
+#     fblk.append(keywords.block_cli_if_recover_init())
+#     
+#     gblk.append(keywords.block_cli_if_map_init())
+#     gblk.append(keywords.block_cli_if_call_desc_update())
+#     gblk.append(keywords.block_cli_if_tracking_map_ds())
+#     gblk.append(keywords.block_cli_if_tracking_map_fn())
+#     gblk.append(keywords.block_cli_if_upcall_creator())
+#     gblk.append(keywords.block_cli_if_recover())
+#     gblk.append(keywords.block_cli_if_basic_id()) 
+#     gblk.append(keywords.block_cli_if_recover_upcall())
+#     gblk.append(keywords.block_cli_if_recover_upcall_extern())  
+#     gblk.append(keywords.block_cli_if_recover_upcall_entry())  
+#     gblk.append(keywords.block_cli_if_recover_data())
+#     gblk.append(keywords.block_cli_if_save_data())
+# 
+#     ser_fblk.append(keywords.block_ser_if_recreate_exist())
+#     ser_fblk.append(keywords.block_ser_if_upcall_creator())    
+#     ser_fblk.append(keywords.block_ser_if_block_track())
+#     ser_fblk.append(keywords.block_ser_if_client_fault_notification())
+#===============================================================================
     
     for item in gblk:
         globalblocks.append(item)          
-    for item in fblk:
+    for item in cfblk:
         funcblocks.append(item)
-    for item in ser_fblk:
+    for item in sfblk:
         ser_funcblocks.append(item)
-    
+    for item in marshallingblk:
+        marshall_funcblocks.append(item)
+    for item in gblk_nonfunc:
+        global_nonfun_blocks.append(item)
+        
 #===============================================================================
 #
 #   CONSTRUCT STATE MACHINE AND TRANSITION WITH THE FAULT/RECOVERY 
@@ -569,6 +738,8 @@ def init_blocks(globalblocks, funcblocks, ser_funcblocks):
 def update_current_state(result, state_list, IFcode):    
     # set the current state
     #pprint(IFcode)
+    #pprint(state_list)
+    
     for tup in result.tuple:
         for func in tup.functions:
             for item in state_list:
@@ -580,7 +751,7 @@ def update_current_state(result, state_list, IFcode):
                     code = IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]
                     code = code.replace("IDL_curr_state;", "")
                     IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
- 
+
 def construct_sm_graph(from_list, to_list, state_list, IFcode):
     smg = Graph(directed=True)
     smg.add_vertices(state_list)
@@ -612,12 +783,15 @@ def generate_sm_transition(result, funcblocks, IFcode):
     for tup in result.tuple:
         # here we fix the start and end to be 1st and 2nd in the list
         for func in tup.functions:
-            
             ##!!!!!!!! 
             ##!!!!!!!! Ignore non-state function. TODO: add this into cidl_ file
             ##!!!!!!!! 
             if (func.info[func.name] == "trmeta" or
-                func.info[func.name] == "twmeta"):
+                func.info[func.name] == "twmeta" or
+                func.info[func.name] == "sched_timeout" or
+                func.info[func.name] == "sched_timestamp" or
+                func.info[func.name] == "sched_component_take" or
+                func.info[func.name] == "sched_component_release"):
                 continue
             
             if (func.info[func.sm_state] == "creation"):
@@ -626,7 +800,7 @@ def generate_sm_transition(result, funcblocks, IFcode):
             elif (func.info[func.sm_state] == "terminal"):
                 fn_list.insert(1, func.info[func.name])
                 state_list.insert(1, "state_"+func.info[func.name])
-            else:
+            elif (func.info[func.sm_state] == "transition"):
                 fn_list.append(func.info[func.name])
                 state_list.append("state_"+func.info[func.name])
         state_list.append("state_null")
@@ -653,23 +827,24 @@ def generate_sm_transition(result, funcblocks, IFcode):
                                        fn_str + "}" +",\n")
                 transition_list_tuple.append((item[0], item[1], tmp_str, fn_str))
 
-    code = IFcode["sm"]
+    #pprint(IFcode)
+    code = IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STATE"]
     code = code.replace("IDL_state_list", ', '.join(state_list))
     code = code.replace("IDL_transition_rules", ' '.join(transition_list_code))
-    IFcode["sm"] = code
+    IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STATE"] = code
 
     # update the initial state in BLOCK_BASIC
     code = IFcode["global"]["BLOCK_CLI_IF_BASIC_ID"]
     code = code.replace("IDL_init_state", state_list[0])
     IFcode["global"]["BLOCK_CLI_IF_BASIC_ID"] = code
-    
+
     # update the SM state and transition function for recovery
     update_current_state(result, state_list, IFcode) 
     smg = construct_sm_graph(from_list, to_list, state_list, IFcode)
 
     # this is the key to the c3 recovery
     recover_sm_transition(state_list, smg, IFcode)
-    
+
     # plot the state transition
     if (keywords.plot_graph == True):      
         keywords.draw_sm_transition(smg)
@@ -690,12 +865,15 @@ def generate_sm_transition(result, funcblocks, IFcode):
 def recover_sm_transition(state_list, smg, IFcode):
     rec_path = {}
     rec_code = ""
-    transition_code = IFcode["state_transition"]
+    
+    transition_code = IFcode["global_non_function"]["BLOCK_CLI_IF_STATE_TRANSITION"]
     creation_v = smg.vs.find(name = state_list[0])   # creation node
+    
+    #print(transition_code)
+    #exit()
     
     for item in state_list:
         tmp_dict = {}
-        #print(item)
         if (item == "state_null"):
             continue
         other_v = smg.vs.find(name = item)
@@ -737,9 +915,10 @@ def recover_sm_transition(state_list, smg, IFcode):
             _tmp = _tmp.replace("IDL_state_transition_call", s)           
             rec_code = rec_code + _tmp
 
-    code = IFcode["internalfn"]
+    code = IFcode['global']["BLOCK_CLI_IF_CALL_DESC_UPDATE"]
     code = code.replace("IDL_state_transition;", rec_code)
-    IFcode["internalfn"] = code
+    IFcode['global']["BLOCK_CLI_IF_CALL_DESC_UPDATE"] = code
+    
 
 #===============================================================================
 #     for edge in smg.es:
@@ -827,9 +1006,10 @@ def lookup_functype(result, fn_name):
 def construct_server_code(result, IFcode):
     server_code = ""  
     IFresult = {}
-               
-    IFresult["SERVER"]  = {"tracds" : IFcode["server"]["server_trackds"]["code"]}
-    server_code = "\n" + server_code + IFresult["SERVER"]["tracds"]
+    IFresult["SERVER"] = {}
+    if ("server_trackds" in IFcode["server"]): # some service does not have server inteface code
+        IFresult["SERVER"]  = {"tracds" : IFcode["server"]["server_trackds"]["code"]}
+        server_code = "\n" + server_code + IFresult["SERVER"]["tracds"]
     IFresult["SERVER"]["block_func"] = {}
     IFresult["SERVER"]["wakeup_func"] = {}
     IFresult["SERVER"]["create_exist_func"] = {}
@@ -846,8 +1026,10 @@ def construct_server_code(result, IFcode):
             v = v.replace("IDL_from_spd", from_spd)
             v = v.replace("IDL_params", tmp_par)
             v = v.replace("IDL_fntype", lookup_functype(result, func_name))
-            v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
-            v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])  
+            if ("lock_take_func" in IFcode):
+                v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
+            if ("lock_release_func" in IFcode):
+                v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])  
                  
             IFresult["SERVER"]["create_exist_func"] = v
             server_code = server_code + v
@@ -860,7 +1042,7 @@ def construct_server_code(result, IFcode):
                     
         elif ("BLOCK_SER_IF_BLOCK_TRACK" == k):  # block
             
-            func_name = IFcode["server"]["block"]             
+            func_name = IFcode["server"]["server_block"]
             tmp_par = IFcode[func_name]["parameters"]["params"]
             from_spd = tmp_par.split(',')[0]
                              
@@ -869,8 +1051,9 @@ def construct_server_code(result, IFcode):
             v = v.replace("IDL_from_spd", from_spd)
             v = v.replace("IDL_params", tmp_par)
             v = v.replace("IDL_fntype", lookup_functype(result, func_name))
-            v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
-            v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])
+            if ("lock_take_func" in IFcode):
+                v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
+                v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])
 
             IFresult["SERVER"]["block_func"]["code"] = v
             server_code = server_code + v
@@ -883,7 +1066,7 @@ def construct_server_code(result, IFcode):
                         
         elif ("BLOCK_SER_IF_CLIENT_FAULT_NOTIFICATION" == k):  # wakeup
             
-            func_name = IFcode["server"]["wakeup"]            
+            func_name = IFcode["server"]["server_wakeup"]            
             tmp_par = IFcode[func_name]["parameters"]["params_decl"]
             from_spd = tmp_par.split(',')[0].split(' ')[1]            
             tmp_par = IFcode[func_name]["parameters"]["params"]
@@ -894,8 +1077,9 @@ def construct_server_code(result, IFcode):
             v = v.replace("IDL_from_spd", from_spd)
             v = v.replace("IDL_params", tmp_par)
             v = v.replace("IDL_fntype", lookup_functype(result, func_name))
-            v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
-            v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])            
+            if ("lock_take_func" in IFcode):
+                v = v.replace("IDL_TAKE", IFcode["lock_take_func"])
+                v = v.replace("IDL_RELEASE", IFcode["lock_release_func"])            
            
             IFresult["SERVER"]["wakeup_func"]["code"] = v            
             server_code = server_code + v            
@@ -953,24 +1137,22 @@ def construct_server_code(result, IFcode):
         server_code = keywords.ser_treadp_str + server_code
     
     #print(server_code)
+    #exit()
     return server_code
 
 def construct_client_code(result, IFcode):
     result_code = ""
     tmp, IFresult = ({} for i in range(2))
     
-    #pprint(IFcode)
-    
     # reorgonize the code section
     IFresult["GLOBAL"]  = {"global_blks":IFcode["global"],    # multiple blocks
                            "extern_fn":IFcode["extern"],
                            "tracking_ds":IFcode["trackds"]["code"],
-                           "internal_fn":IFcode["internalfn"],
                            "internal_fn_decl":IFcode["internalfn_decl"],
                            "mapping ds":IFcode["mapping ds"],
                            "mapping fn":IFcode["mapping fn"]}
     
-    IFresult["SM"]      = {"state_group":IFcode["sm"]} 
+    IFresult["SM"]      = {"state_group":IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STATE"]} 
     
     for tup in result.tuple:
         for func in tup.functions:
@@ -979,6 +1161,7 @@ def construct_client_code(result, IFcode):
     IFresult["FUNCTIONS"] = tmp
  
     # start pasting the code
+    #if (keywords.service_name != "scheduler"):
     result_code = result_code + IFresult["GLOBAL"]["tracking_ds"]
     result_code = result_code + "\n"
     result_code = result_code + IFresult["GLOBAL"]["mapping ds"]
@@ -1000,22 +1183,34 @@ def construct_client_code(result, IFcode):
     result_code = result_code + IFresult["GLOBAL"]["internal_fn_decl"]
     result_code = result_code + "\n"
     
-    result_code = result_code + IFresult["GLOBAL"]["internal_fn"]
-    result_code = result_code + "\n"    
+    #result_code = result_code + IFresult["GLOBAL"]["internal_fn"]
+    #result_code = result_code + "\n"    
     
     
+    #pprint(IFcode)
     for k, v in IFresult["GLOBAL"]["global_blks"].items():
         result_code = result_code + v
         
     # in case that the service has dependency and does not need to recover the root
-    result_code = result_code.replace("IDL_root_id", keywords.rootid[keywords.service_name])
-        
+    if (keywords.service_name in keywords.rootid):
+        result_code = result_code.replace("IDL_root_id", keywords.rootid[keywords.service_name])
+
     for k, v in IFresult["FUNCTIONS"].items():
         for _k, _v in v["blocks"].items():
+            if (_k == "BLOCK_CLI_IF_TRACK"):
+                if (keywords.service_name == "sched"): # scheduler is special
+                    _v = _v.replace("IDL_id", "cos_get_thd_id()")
+                    _v = _v.replace("state_sched_timeout", "0")
+                    _v = _v.replace("state_sched_component_release", "0")
+                    _v = _v.replace("state_sched_component_take", "0")
+                    _v = _v.replace("desc->cos_get_thd_id()", "desc->IDL_id")                    
+            if (_k == "BLOCK_CLI_IF_CSTUB"): # cstub_fn is not normal function (e.g., marshal) - use "cstub_fn" 
+                continue
             result_code = result_code + _v
+            
     for k, v in IFresult["FUNCTIONS"].items():
         result_code = result_code + v["cstub_fn"]
-    
+        
     # finally replace IDL_id, IDL_server_id, IDL_parent_id
     result_code = result_code.replace("IDL_id", final_id)
     result_code = result_code.replace("IDL_server_id", "server_" + final_id)
@@ -1033,7 +1228,6 @@ def construct_client_code(result, IFcode):
     if (marshalling_flag == True):
         result_code = keywords.para_save_str + result_code
     
-    #print(result_code)
     #exit()
     return result_code
 
@@ -1138,7 +1332,8 @@ def paste_idl_code(result, IFcode):
     print ("\n<<<IDL process is done!!>>>")
 
 def idl_generate(result, parsed_ast):
-    globaldescp, funcdescps, globalblocks, funcblocks, ser_funcblocks = ([] for i in range(5))
+    globaldescp, funcdescps, globalblocks, global_nonfun_blocks,\
+    funcblocks, ser_funcblocks, marshall_funcblocks= ([] for i in range(7))
     IFcode          = {}
     
     #===========================================================================
@@ -1153,23 +1348,24 @@ def idl_generate(result, parsed_ast):
     # pprint (result.tuple[0].functions[3].info)
     # exit()
     #===========================================================================
+    #exit()
     
-    keywords.read_from_template_code(IFcode)    
+    #keywords.read_from_template_code(IFcode)    
     IFDesc = (globaldescp, funcdescps)
     
     # build blocks and descriptions
     generate_description(result, funcdescps, globaldescp) 
-    init_blocks(globalblocks, funcblocks, ser_funcblocks)
-
+    init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, global_nonfun_blocks)
     #pprint(globaldescp)
     #exit()
     # evaluate the conditions and generate block code
+    generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode)
     generate_globalvas(result, IFcode)
-    generate_gblocks(result, globalblocks, IFDesc, IFcode)
+    
     # server side code
     generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode)
     # client side code
-    generate_fblocks(result, funcblocks, IFDesc, IFcode)
+    generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks)
 
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)

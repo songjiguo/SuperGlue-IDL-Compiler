@@ -76,9 +76,10 @@ def parse_decl_info(node):
         result.tuple[-1].sm_info[ret[0]] = [("null", ret[1])]
     elif (ret[0] == "terminal"):
         result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
-        #print()
-    elif (ret[0] == "block" or ret[0] == "wakeup"):
-        result.tuple[-1].ser_block_track[ret[0]]  = ret[1]
+    elif (ret[0] == "block"):
+        result.tuple[-1].ser_block_track["server_block"]  = ret[1]
+    elif (ret[0] == "wakeup"):
+        result.tuple[-1].ser_block_track["server_wakeup"]  = ret[1]
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
@@ -208,7 +209,7 @@ def parse_parameters(node):
 def parse_func(node):
     global idl_parse_result 
     func_params = [] 
-
+    
     ##### begin of a function #####
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
@@ -223,29 +224,31 @@ def parse_func(node):
         fun_info[fun.sm_state]  = "transition"
     
     #pprint(fun_info)
-
+    #print (node.type.declname)
+    #print (type(node.args).__name__)
     #### parameters of a function #####   KEVIN ANDY
-    for param_decl in node.args.params:
-        func_params = parse_parameters(param_decl)
-        #print (param_decl)
-        #print (list(traverse(func_params)))
-        # swap the type and value for para (last one is the pycparser type, eg.g, PtrDecl)
-        tmp = func_params[-2]
-        func_params[-2] = func_params[-3]
-        func_params[-3] = tmp
-           
-        #print (func_params)
-        construct_desc_fields(fun_info[fun.name], func_params)   # construct desc tracking fields    
-        # for normal parameters
-        fun.normal_para.append((func_params[-3], func_params[-2]))
-           
-        # if there is a match 
-        if (func_params[0] in fun_info):
-            if isinstance(fun_info[func_params[0]], basestring):
-                print (">>>>>  " + func_params[0])
-                fun_info[func_params[0]] = func_params[1:]
-            elif isinstance(fun_info[func_params[0]], list):
-                fun_info[func_params[0]].append(func_params[1:])
+    if (type(node.args).__name__ != "NoneType"):  # some functions do not have parameters
+        for param_decl in node.args.params:
+            func_params = parse_parameters(param_decl)
+            #print (param_decl)
+            #print (list(traverse(func_params)))
+            # swap the type and value for para (last one is the pycparser type, eg.g, PtrDecl)
+            tmp = func_params[-2]
+            func_params[-2] = func_params[-3]
+            func_params[-3] = tmp
+    
+            #print (func_params)
+            construct_desc_fields(fun_info[fun.name], func_params)   # construct desc tracking fields    
+            # for normal parameters
+            fun.normal_para.append((func_params[-3], func_params[-2]))
+               
+            # if there is a match 
+            if (func_params[0] in fun_info):
+                if isinstance(fun_info[func_params[0]], basestring):
+                    print (">>>>>  " + func_params[0])
+                    fun_info[func_params[0]] = func_params[1:]
+                elif isinstance(fun_info[func_params[0]], list):
+                    fun_info[func_params[0]].append(func_params[1:])
           
     #### return of a function ####        
     func_return = parse_idl_str('CD', str(get_dec_type_name(node)[0]))
@@ -289,7 +292,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_evt.h'
+        filename = 'input/cidl_mm.h'
     
     keywords.init_service_name(filename)    
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
@@ -326,19 +329,26 @@ if __name__ == "__main__":
     # pprint (result.gvars)
     #===========================================================================
  
-    #===========================================================================
-    # print("")
-    # pprint (result.tuple[0].functions[0].info)
-    # print("")
-    # pprint (result.tuple[0].functions[1].info)
-    # print("")
-    # pprint (result.tuple[0].functions[2].info)
-    # print("")
-    # pprint (result.tuple[0].functions[3].info)
-    # print("")
-    #===========================================================================
-    #exit()
-  
+#===============================================================================
+#     print("")
+#     pprint (result.tuple[0].functions[0].info)
+#     print("")
+#     pprint (result.tuple[0].functions[1].info)
+#     print("")
+#     pprint (result.tuple[0].functions[2].info)
+#     print("")
+#     pprint (result.tuple[0].functions[3].info)
+#     print("")
+#     pprint (result.tuple[0].functions[4].info)
+#     print("")
+#     pprint (result.tuple[0].functions[5].info)
+#     print("")
+#     pprint (result.tuple[0].functions[6].info)
+#     print("")
+# 
+#     exit()
+#===============================================================================
+      
     c3_gen.idl_generate(result, ast)
     
     

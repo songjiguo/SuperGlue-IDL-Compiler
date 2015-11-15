@@ -12,6 +12,7 @@ SCHED_SERVICE=sched
 MM_SERVICE=mm
 MBOX_SERVICE=mbox
 TE_SERVICE=te
+SCHED_SERVICE=sched
 
 ##############
 ## everything
@@ -26,7 +27,7 @@ all_lock: parse_lock compile_lock gen_lock cp_lock plot_lock
 all_evt: parse_evt compile_evt gen_evt cp_evt plot_evt
 
 
-
+# everything with the benchmark
 all_bench: parse_all compile_all gen_all_bench cp_all
 
 all_ramfs_bench: parse_ramfs compile_ramfs gen_ramfs_bench cp_ramfs plot_ramfs
@@ -56,10 +57,15 @@ parse_evt:
 	@echo "IDL process starting.... <<<"$(EVT_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(EVT_SERVICE).h
 
+parse_sched:
+	@echo
+	@echo "IDL process starting.... <<<"$(SCHED_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h
+
 ##############
 ## compiling
 ##############
-compile_all: compile_ramfs compile_lock
+compile_all: compile_ramfs compile_lock compile_evt compile_sched
 	@echo
 
 compile_ramfs:
@@ -81,6 +87,13 @@ compile_evt:
 	@echo "Compiling starting.... <<<"$(EVT_SERVICE)">>>"
 	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_c_stub.c
 	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_s_cstub.c
+	rm output/$(TMP_OUTPUT)
+
+compile_sched:
+	@echo
+	@echo "Compiling starting.... <<<"$(SCHED_SERVICE)">>>"
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_c_stub.c
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 ########################################################
