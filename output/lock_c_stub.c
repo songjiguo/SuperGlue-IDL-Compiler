@@ -6,7 +6,6 @@ struct desc_track {
 	u32_t thd_id;
 	unsigned int state;
 	unsigned int next_state;
-	int server_lock_id;
 	unsigned long long fault_cnt;
 };
 
@@ -17,7 +16,7 @@ static int first_map_init = 0;
 COS_MAP_CREATE_STATIC(lock_desc_maps);
 CSLAB_CREATE(lock_slab, sizeof(struct desc_track));
 
-static inline struct desc_track *call_desc_lookup(int id)
+static inline struct desc_track *call_desc_lookup(ul_t id)
 {
 	return (struct desc_track *)cos_map_lookup(&lock_desc_maps, id);
 }
@@ -25,7 +24,7 @@ static inline struct desc_track *call_desc_lookup(int id)
 static inline struct desc_track *call_desc_alloc()
 {
 	struct desc_track *desc = NULL;
-	int map_id = 0;
+	ul_t map_id = 0;
 
 	while (1) {
 		desc = cslab_alloc_lock_slab();
@@ -43,7 +42,7 @@ static inline struct desc_track *call_desc_alloc()
 static inline void call_desc_dealloc(struct desc_track *desc)
 {
 	assert(desc);
-	int id = desc->lock_id;
+	ul_t id = desc->lock_id;
 	desc->server_lock_id = -1;	// reset to -1
 	assert(desc);
 	cslab_free_lock_slab(desc);
@@ -55,11 +54,10 @@ enum state_codes { state_lock_component_alloc, state_lock_component_free,
 	    state_lock_component_take, state_lock_component_pretake,
 	    state_lock_component_release, state_null };
 
-static inline struct desc_track *call_desc_update(int id, int next_state);
+static inline struct desc_track *call_desc_update(ul_t id, int next_state);
 static inline void call_map_init();
-static inline void block_cli_if_recover(int id);
-static inline void block_cli_if_basic_id(int id);
-static inline void block_cli_if_upcall_creator(int id);
+static inline void block_cli_if_recover(ul_t id);
+static inline void block_cli_if_basic_id(ul_t id);
 static inline void block_cli_if_recover_data(struct desc_track *desc);
 static inline int block_cli_if_invoke_lock_component_alloc(spdid_t spdid,
 							   int ret, long *fault,
@@ -69,7 +67,7 @@ static inline void block_cli_if_desc_update_lock_component_alloc();
 static inline int block_cli_if_desc_update_post_fault_lock_component_alloc();
 static inline int block_cli_if_track_lock_component_alloc(int ret,
 							  spdid_t spdid);
-static inline void call_desc_cons(struct desc_track *desc, int id,
+static inline void call_desc_cons(struct desc_track *desc, ul_t id,
 				  spdid_t spdid);
 static inline int block_cli_if_invoke_lock_component_take(spdid_t spdid,
 							  ul_t lock_id,
@@ -77,7 +75,7 @@ static inline int block_cli_if_invoke_lock_component_take(spdid_t spdid,
 							  long *fault,
 							  struct usr_inv_cap
 							  *uc);
-static inline void block_cli_if_desc_update_lock_component_take(int id);
+static inline void block_cli_if_desc_update_lock_component_take(ul_t id);
 static inline int block_cli_if_desc_update_post_fault_lock_component_take();
 static inline int block_cli_if_track_lock_component_take(int ret, spdid_t spdid,
 							 ul_t lock_id,
@@ -89,7 +87,7 @@ static inline int block_cli_if_invoke_lock_component_pretake(spdid_t spdid,
 							     long *fault,
 							     struct usr_inv_cap
 							     *uc);
-static inline void block_cli_if_desc_update_lock_component_pretake(int id);
+static inline void block_cli_if_desc_update_lock_component_pretake(ul_t id);
 static inline int block_cli_if_desc_update_post_fault_lock_component_pretake();
 static inline int block_cli_if_track_lock_component_pretake(int ret,
 							    spdid_t spdid,
@@ -101,7 +99,7 @@ static inline int block_cli_if_invoke_lock_component_release(spdid_t spdid,
 							     long *fault,
 							     struct usr_inv_cap
 							     *uc);
-static inline void block_cli_if_desc_update_lock_component_release(int id);
+static inline void block_cli_if_desc_update_lock_component_release(ul_t id);
 static inline int block_cli_if_desc_update_post_fault_lock_component_release();
 static inline int block_cli_if_track_lock_component_release(int ret,
 							    spdid_t spdid,
@@ -111,13 +109,13 @@ static inline int block_cli_if_invoke_lock_component_free(spdid_t spdid,
 							  long *fault,
 							  struct usr_inv_cap
 							  *uc);
-static inline void block_cli_if_desc_update_lock_component_free(int id);
-static inline void block_cli_if_desc_update_lock_component_free(int id);
+static inline void block_cli_if_desc_update_lock_component_free(ul_t id);
+static inline void block_cli_if_desc_update_lock_component_free(ul_t id);
 static inline int block_cli_if_desc_update_post_fault_lock_component_free();
 static inline int block_cli_if_desc_update_post_fault_lock_component_free();
-static inline void block_cli_if_recover_subtree(int id);
 static inline int block_cli_if_track_lock_component_free(int ret, spdid_t spdid,
 							 ul_t lock_id);
+static inline void block_cli_if_recover_upcall_subtree(ul_t id);
 
 static inline void call_map_init()
 {
@@ -128,25 +126,12 @@ static inline void call_map_init()
 	return;
 }
 
-static inline void block_cli_if_recover_data(struct desc_track *desc)
+static inline void block_cli_if_recover(ul_t id)
 {
+	block_cli_if_basic_id(id);
 }
 
-static inline void call_desc_cons(struct desc_track *desc, int id,
-				  spdid_t spdid)
-{
-	assert(desc);
-
-	desc->server_lock_id = id;
-
-	desc->spdid = spdid;
-
-	desc->fault_cnt = global_fault_cnt;
-
-	return;
-}
-
-static inline void block_cli_if_basic_id(int id)
+static inline void block_cli_if_basic_id(ul_t id)
 {
 
 	assert(id);
@@ -168,29 +153,36 @@ static inline void block_cli_if_basic_id(int id)
 	block_cli_if_recover_data(desc);
 }
 
-static inline void block_cli_if_recover(int id)
-{
-	block_cli_if_basic_id(id);
-}
-
-static inline void block_cli_if_upcall_creator(int id)
+static inline void block_cli_if_recover_data(struct desc_track *desc)
 {
 }
 
-static inline struct desc_track *call_desc_update(int id, int next_state)
+static inline void call_desc_cons(struct desc_track *desc, ul_t id,
+				  spdid_t spdid)
+{
+	assert(desc);
+
+	desc->server_lock_id = id;
+
+	desc->spdid = spdid;
+
+	desc->fault_cnt = global_fault_cnt;
+
+	return;
+}
+
+static inline struct desc_track *call_desc_update(ul_t id, int next_state)
 {
 	struct desc_track *desc = NULL;
 	unsigned int from_state = 0;
 	unsigned int to_state = 0;
 
 	if (id == 0)
-		return NULL;	/* root id */
+		return NULL;
 
 	desc = call_desc_lookup(id);
-	if (unlikely(!desc)) {
-		block_cli_if_upcall_creator(id);
+	if (unlikely(!desc))
 		goto done;
-	}
 
 	desc->next_state = next_state;
 
@@ -235,7 +227,7 @@ static inline int block_cli_if_track_lock_component_pretake(int ret,
 	return ret;
 }
 
-static inline void block_cli_if_desc_update_lock_component_pretake(int id)
+static inline void block_cli_if_desc_update_lock_component_pretake(ul_t id)
 {
 	call_desc_update(id, state_lock_component_pretake);
 }
@@ -272,7 +264,7 @@ static inline int block_cli_if_track_lock_component_release(int ret,
 	return ret;
 }
 
-static inline void block_cli_if_desc_update_lock_component_release(int id)
+static inline void block_cli_if_desc_update_lock_component_release(ul_t id)
 {
 	call_desc_update(id, state_lock_component_release);
 }
@@ -308,7 +300,7 @@ static inline int block_cli_if_track_lock_component_take(int ret, spdid_t spdid,
 	return ret;
 }
 
-static inline void block_cli_if_desc_update_lock_component_take(int id)
+static inline void block_cli_if_desc_update_lock_component_take(ul_t id)
 {
 	call_desc_update(id, state_lock_component_take);
 }
@@ -369,12 +361,12 @@ static inline int block_cli_if_invoke_lock_component_alloc(spdid_t spdid,
 	return ret;
 }
 
-static inline void block_cli_if_desc_update_lock_component_free(int id)
+static inline void block_cli_if_desc_update_lock_component_free(ul_t id)
 {
 	call_desc_update(id, state_lock_component_free);
 }
 
-static inline void block_cli_if_recover_subtree(int id)
+static inline void block_cli_if_recover_upcall_subtree(ul_t id)
 {
 }
 
@@ -491,7 +483,7 @@ CSTUB_FN(ul_t, lock_component_alloc) (struct usr_inv_cap * uc, spdid_t spdid) {
 	call_map_init();
 
  redo:
-	block_cli_if_desc_update_lock_component_alloc();
+	block_cli_if_desc_update_lock_component_alloc(lock_id);
 
 	ret = block_cli_if_invoke_lock_component_alloc(spdid, ret, &fault, uc);
 	if (unlikely(fault)) {

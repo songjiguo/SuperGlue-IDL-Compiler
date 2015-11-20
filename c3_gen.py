@@ -28,9 +28,15 @@ desc_track_server_id = "int IDL_server_id"
 desc_track_fault_cnt = "unsigned long long fault_cnt"
 desc_track_state = "unsigned int state"
 desc_track_next_state = "unsigned int next_state"
+desc_track_subtree_parent = "unsigned int is_parent"
 
+root_function = ""
+creation_function = ""
 final_id = ""
+final_id_type = ""
 final_parent_id = ""
+final_parent_id_type = ""
+final_parent_component = ""
 
 marshalling_flag = False
 
@@ -129,7 +135,8 @@ boolExpr = infixNotation( boolOperand,
     ("or",  2, opAssoc.LEFT,  BoolOr),
     ])
 
-desc_close_self_only      = False
+# visible to the programmer
+desc_close_self_only   = False
 desc_close_subtree     = False
 desc_dep_create_none   = False
 desc_dep_create_diff   = False
@@ -146,9 +153,10 @@ terminal               = False
 server_block           = False
 server_wakeup          = False
 
+# invisible to the programmer
 non_function           = True  # alwasy appear
 marshalling            = False # no marshalling by default
-
+create_new_id          = True  # majority create APIs return new id, except mem_get_page and pte
 #===============================================================================
 #
 #  EXTRACT THE INFO AND CONSTRUCT THE CODE BLOCKS
@@ -182,7 +190,7 @@ def init_cond_table(gdescp, fdescp):
         terminal        = "terminal"        in fdescp[2]
         server_block    = "server_block"    in fdescp[5]  # see the generate_description
         server_wakeup   = "server_wakeup"   in fdescp[5]
-    
+        
     if (gdescp == "marshalling" and fdescp is None):
         marshalling = True
    
@@ -191,23 +199,28 @@ def condition_eval(block, (gdescp, fdescp)):
     IFBlkName = ""
     
     init_cond_table(gdescp, fdescp)
-    #pprint(gdescp)
-    #pprint(fdescp)
-    #print(desc_close_self_only & desc_close_subtree)
-    
-    list_descp = list(traverse(gdescp)) + list(traverse(fdescp))
-    find_any = False
-    #print(list(traverse(gdescp)))
-    #print(block.list)
-    # blk[0] is the predicate
     for blk in block.list:
-        #print(blk[0])
-        #print(eval(blk[0]))
-        if (eval(blk[0])):
-            IFCode = blk[1]
-            IFBlkName = blk[2]
-            #print(IFBlkName)
-            #print(IFCode)
+        if (eval(blk[0])):      # blk[0] is the list of predicates
+            IFCode = blk[1]     # blk[1] is the block code
+            IFBlkName = blk[2]  # blk[2] is the block name
+                
+    #===========================================================================
+    # #pprint(gdescp)
+    # #pprint(fdescp)
+    # #print(desc_close_self_only & desc_close_subtree)
+    # 
+    # #list_descp = list(traverse(gdescp)) + list(traverse(fdescp))
+    # #find_any = False
+    # #print(list(traverse(gdescp)))
+    # #print(block.list)
+    # # blk[0] is the predicate
+    # for blk in block.list:
+    #     if (eval(blk[0])):      # blk[0] is the list of predicates
+    #         IFCode = blk[1]     # blk[1] is the block code
+    #         IFBlkName = blk[2]  # blk[2] is the block name
+    #         #print(IFBlkName)
+    #         #print(IFCode)
+    #===========================================================================
         
 #===============================================================================
 #         list_blks = []
@@ -278,7 +291,7 @@ def generate_globalvas(result, IFcode):
     if (keywords.service_name != "mem_mgr"):  # mm does not block
         keywords.get_lock_function(IFcode, keywords.service_name)
 
-    global final_id, final_parent_id
+    global final_id, final_parent_id, final_parent_component, final_id_type, final_parent_id_type
 
     # set up the tracking strcuture
     IFcode["trackds"] = {"code":  IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STRUCT"]}
@@ -289,13 +302,20 @@ def generate_globalvas(result, IFcode):
     for item in result.gvars["desc_data"]:
         tmp = tmp + "    " + " ".join(item) + ";\n"
         
+    
     # transparent to the user
     tmp = tmp + "    " + desc_track_state + ";\n"  
     tmp = tmp + "    " + desc_track_next_state + ";\n"  
-    tmp = tmp + "    " + desc_track_server_id + ";\n"
     tmp = tmp + "    " + desc_track_fault_cnt + ";"
-    tmp = tmp + "\n};\n"  
     
+    if (desc_close_subtree):
+        tmp = tmp + "    " + "\n\n"  
+        tmp = tmp + "    "  + desc_track_subtree_parent + ";\n"  
+        tmp = tmp + "    " + "struct IDL_desc_track *next, *prev" + ";\n"
+    elif (desc_global):
+        tmp = tmp + "    " + desc_track_server_id + ";\n"
+
+    tmp = tmp + "\n};\n"  
     code = code.replace("struct IDL_desc_track\n", tmp) # only replace a line, not everywhere
     code = code.replace("struct IDL_desc_track", "struct desc_track") # only replace a line, not everywhere
 
@@ -307,17 +327,28 @@ def generate_globalvas(result, IFcode):
     code = code.replace("IDL_desc_track_fields", tmp[:-2])  # -2 is to remove last ","
     # internal function files
     #code = r'''#include "cidl_gen.h"''' + "\n" + code 
+    #pprint(result.gvars)
     
     if ("id" in result.gvars):
         IFcode["trackds"]["desc_id"] = result.gvars["id"]
     if ("parent id" in result.gvars):
         IFcode["trackds"]["desc_parent id"] = result.gvars["parent id"]
+    if ("parent component" in result.gvars):
+        IFcode["trackds"]["desc_parent component"] = result.gvars["parent component"]
     IFcode["trackds"]["code"] = code
 
     if ("desc_id" in IFcode["trackds"]):
-        final_id = IFcode["trackds"]["desc_id"][1]
+        final_id_type = IFcode["trackds"]["desc_id"][0]
+        final_id      = IFcode["trackds"]["desc_id"][1]
     if ("desc_parent id" in IFcode["trackds"]):
-        final_parent_id = IFcode["trackds"]["desc_parent id"][1]
+        final_parent_id_type = IFcode["trackds"]["desc_parent id"][0]
+        final_parent_id      = IFcode["trackds"]["desc_parent id"][1]
+    if ("desc_parent component" in IFcode["trackds"]):
+        final_parent_component = IFcode["trackds"]["desc_parent component"][1]
+
+    #print(IFcode["trackds"]["fields"])
+    #print(result.gvars["desc_data"])
+    #pprint(result.gvars)
 
 def generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode):
     # the global blocks
@@ -364,13 +395,20 @@ def generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode)
 
     IFcode["global_non_function"] = __IFcode
     #pprint(IFcode["global_non_function"])
+    #pprint(IFcode["global"])
     #exit()
 
 def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
+    IFcode["server"] = {}
+    IFcode["server"]["server_code"] = {}
+    IFcode["server"]["server_trackds"] = {"code":""}    
+    
+    #print(keywords.service_name)
+    # for now. we do not recover other system services that depend on ramfs and timed_evt
+    # so basically there services are the top level service and no need to track/block
+    if (keywords.service_name == "periodic_wake" or keywords.service_name == "sched"): return
+    
     if (ser_funcblocks):
-        IFcode["server"] = {}
-        IFcode["server"]["server_code"] = {}
-        IFcode["server"]["server_trackds"] = {"code":""}
         for serblk in ser_funcblocks:
             #print(serblk.show())
             name, code= condition_eval(serblk, (IFDesc[0], None))
@@ -387,21 +425,22 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
 
 # initial creation -- starting point in SM transition, treat this specially            
 def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
-    
-    pprint(IFcode)
     code = IFcode["global"]['BLOCK_CLI_IF_BASIC_ID']
     code = code.replace("IDL_desc_saved_params", subIFcode["parameters"]["desc_params"])
+    
     code = code.replace("IDL_fname", fdesc[0])
     IFcode["global"]['BLOCK_CLI_IF_BASIC_ID'] = code 
     
     #code = subIFcode["cstub_fn"]
     #code = code.replace("IDL_id", "")
     #subIFcode["cstub_fn"] = code
-    
+    #print(fdesc)
+    #exit()
     # desc_cons
     #print(IFcode['global']["BLOCK_CLI_IF_DESC_CONS"])
     code = IFcode['global']["BLOCK_CLI_IF_DESC_CONS"]
     tmp = ""
+    tmp_parent = ""
     for f, b in zip(subIFcode["parameters"]["desc_params"].split(","), 
                     subIFcode["parameters"]["params"].split(", ")):
         if (marshall_cp and b == marshall_cp[0]):
@@ -409,7 +448,8 @@ def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
                   marshall_cp[1] +");"+ ";\n"
             continue
         tmp = tmp + f + "=" + b + ";\n"
-    
+    tmp_parent = tmp.replace("desc", "parent_desc")
+
     # treat the marshalled params differently (save parameterusing maloc)  
     # assume only one data being passed per invocation  
     # if (marshall_cp):
@@ -417,6 +457,8 @@ def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
         
     code = code.replace("IDL_parsdecl", subIFcode["parameters"]["params_decl"])
     code = code.replace("IDL_desc_cons;", tmp)
+    code = code.replace("IDL_parent_desc_cons;", tmp_parent)
+
     IFcode['global']["BLOCK_CLI_IF_DESC_CONS"] = code
     
     # write out the declaration
@@ -440,8 +482,7 @@ def bench_mark(code, fname):
 # 2) passing pointer, and which is not "__retval" type
 # 3) more than 1 return val
 def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblocks):
-    
-    global marshalling_flag
+    global marshalling_flag, creation_function, root_function
     subIFcode["marshall fn"] = []
     marshall_cp = []
     param_list = subIFcode["parameters"]["params"].split(", ")
@@ -552,23 +593,37 @@ def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblo
     
     subIFcode["marshall ds"] = replace_params(result, fdesc, marshalling_ds, IFcode, 
                                                  subIFcode, param_list, paramdecl_list)
+    
+    if (fdesc[0] == creation_function):
+        init_creation(fdesc, subIFcode, IFcode, marshall_cp)     
+
+    # root function can be same as creation function, however, it can also be different
+    # for example, mem_mgr. This is used when recreate the root desc only
     if (fdesc[2] == "creation"):
-        init_creation(fdesc, subIFcode, IFcode, marshall_cp)
+        root_function = fdesc[0]        
+    code = subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"]
+    code = code.replace("IDL_root_fname", root_function)
+    subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"] = code    
 
     #print(subIFcode["cstub_fn"])
     code = subIFcode["cstub_fn"]
-    if (final_id in param_list):
+    #if (final_id in param_list):
+    if (final_id):
         code = code.replace("IDL_id", final_id)
     else:
+        code = code.replace("IDL_id, ", "")  # this is for (IDL_id, IDL_parent_id)
         code = code.replace("IDL_id", "")
-    if (final_parent_id in param_list):
+        
+    if (final_parent_id):
         code = code.replace("IDL_parent_id", final_parent_id)
     else:
+        code = code.replace(", IDL_parent_id", "")  # this is for (IDL_id, IDL_parent_id)
         code = code.replace("IDL_parent_id", "")
     #print(code)
         
     subIFcode["cstub_fn"] = code
     #print(subIFcode["cstub_fn"])
+    #print(final_id)
     #exit()
 #===============================================================================
 #     print(final_id)    
@@ -590,10 +645,31 @@ def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblo
         subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = tmp
     #print(subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"])        
 
+# there are 2 situations to decide if a function is creation function
+# 1) has desc_data_retval (done above)
+# 2) has no desc_data_retval, then sm_creation must be (done here)
+def get_create_function(IFDesc):
+    ret = ""
+    for fdesc in IFDesc[1]:
+        if any("desc_data_retval" in code and code[1] for code in fdesc[3]):
+            ret = fdesc[0]
+    if (ret):
+        return ret
+     
+    # we only get here if there is no "desc_data_retval" in the cidl
+    for fdesc in IFDesc[1]:
+        if (fdesc[2] == "creation"):
+            ret = fdesc[0]        
+    return ret
+
 def generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks):
+    global creation_function
     #no_match_code_list = []
     tmp_s_stubS = []
 
+    creation_function = get_create_function(IFDesc)
+    if not creation_function: raise Exception( "Can not find creation function" )
+    
     # evaluate function blocks (and also generate cstub code here)
     for fdesc in IFDesc[1]:
         subIFcode, subIFcode["parameters"],subIFcode["blocks"], subIFcode["state"] = ({} for i in range(4)) 
@@ -631,8 +707,8 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks):
         construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblocks)
 
         IFcode[fdesc[0]] = subIFcode
+        #pprint(IFcode[fdesc[0]]) 
         
-        #pprint(IFcode[fdesc[0]])
     #pprint (IFcode)
     #exit()
     # this is the non-match list and should be empty static inline function ?? why need this?
@@ -642,6 +718,7 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks):
 
 # construct global/function description
 def generate_description(result, funcdescps, globaldescp):
+    global create_new_id    
     for tup in result.tuple:
         keywords.init_service_name(result.gvars["global_info"]["service_name"])
         for key, value in tup.info.iteritems():
@@ -673,8 +750,23 @@ def generate_description(result, funcdescps, globaldescp):
                     idlRet.append((key, value))
             perFunc = (func.info[func.name], normalPara,    #--- this is the funcdescp tuple
                        func.info[func.sm_state], idlRet, idlPara, block_or_wakeup)
+            #print(idlRet)
+            # this indicates if a service returns a new id (e.g., mmgr does not)
+            #===================================================================
+            # for code in idlRet:
+            #     if (code[0] == "desc_data_retval"):
+            #         if (tuple(code[1]) in normalPara): create_new_id = False
+            #         if (keywords.service_name == "periodic_wake"): create_new_id = False
+            #===================================================================
+                                 
             funcdescps.append(perFunc)
-       #pprint(funcdescps)
+    
+    # hard code these two special services that do not return new id
+    if (keywords.service_name == "periodic_wake"): create_new_id = False
+    if (keywords.service_name == "mem_mgr"): create_new_id = False
+    #pprint(funcdescps)
+    #print(create_new_id)
+    #exit()
             
 #  init blocks of (predicate, code) 
 def init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, global_nonfun_blocks):
@@ -687,40 +779,9 @@ def init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, g
     # ser_fblk.append(keywords.build_ser_fblk_code())
     # gblk.append(keywords.build_gblk_code())
     #===========================================================================
-        
-#===============================================================================
-#     fblk.append(keywords.block_cli_if_invoke())
-#     
-#     exit()
-#     fblk.append(keywords.block_cli_if_marshalling_invoke()) # marshalling version
-#     fblk.append(keywords.block_cli_if_desc_update_pre())
-#     fblk.append(keywords.block_cli_if_desc_update_post_fault())
-#     fblk.append(keywords.block_cli_if_invoke_ser_intro())
-#     fblk.append(keywords.block_cli_if_recover_subtree())
-#     fblk.append(keywords.block_cli_if_track())  
-#     fblk.append(keywords.block_cli_if_recover_init())
-#     
-#     gblk.append(keywords.block_cli_if_map_init())
-#     gblk.append(keywords.block_cli_if_call_desc_update())
-#     gblk.append(keywords.block_cli_if_tracking_map_ds())
-#     gblk.append(keywords.block_cli_if_tracking_map_fn())
-#     gblk.append(keywords.block_cli_if_upcall_creator())
-#     gblk.append(keywords.block_cli_if_recover())
-#     gblk.append(keywords.block_cli_if_basic_id()) 
-#     gblk.append(keywords.block_cli_if_recover_upcall())
-#     gblk.append(keywords.block_cli_if_recover_upcall_extern())  
-#     gblk.append(keywords.block_cli_if_recover_upcall_entry())  
-#     gblk.append(keywords.block_cli_if_recover_data())
-#     gblk.append(keywords.block_cli_if_save_data())
-# 
-#     ser_fblk.append(keywords.block_ser_if_recreate_exist())
-#     ser_fblk.append(keywords.block_ser_if_upcall_creator())    
-#     ser_fblk.append(keywords.block_ser_if_block_track())
-#     ser_fblk.append(keywords.block_ser_if_client_fault_notification())
-#===============================================================================
     
     for item in gblk:
-        globalblocks.append(item)          
+        globalblocks.append(item)   
     for item in cfblk:
         funcblocks.append(item)
     for item in sfblk:
@@ -755,6 +816,11 @@ def update_current_state(result, state_list, IFcode):
 def construct_sm_graph(from_list, to_list, state_list, IFcode):
     smg = Graph(directed=True)
     smg.add_vertices(state_list)
+    
+    #print(from_list)
+    #print(to_list)
+    #print()
+
     smg.add_edges(zip(from_list,to_list))
         
     for e in smg.es:
@@ -804,7 +870,8 @@ def generate_sm_transition(result, funcblocks, IFcode):
                 fn_list.append(func.info[func.name])
                 state_list.append("state_"+func.info[func.name])
         state_list.append("state_null")
-
+        
+        
         for k, v in tup.sm_info.items():
             for item in v:
                 if (item[1] == "end"):  # does not count the end state
@@ -867,18 +934,25 @@ def recover_sm_transition(state_list, smg, IFcode):
     rec_code = ""
     
     transition_code = IFcode["global_non_function"]["BLOCK_CLI_IF_STATE_TRANSITION"]
-    creation_v = smg.vs.find(name = state_list[0])   # creation node
+    #creation_v = smg.vs.find(name = state_list[0])   # creation node
+    creation_v = smg.vs.find(name = "state_"+creation_function)
     
-    #print(transition_code)
-    #exit()
-    
+#===============================================================================
+#     print(state_list)
+#     print(creation_function)
+#     print(transition_code)
+#     print(creation_v)    
+#     print(state_list)
+# 
+#     exit()
+#===============================================================================
     for item in state_list:
         tmp_dict = {}
         if (item == "state_null"):
             continue
         other_v = smg.vs.find(name = item)
         
-        # condition 1: for wakeup function, no need to find a path. See "cstub no redo" 
+        # condition 1: for wakeup function, no need to find a path. See "cstub no redo"
         if ("wakeup" in IFcode["server"]):
             if (item.replace("state_", "") == IFcode["server"]["wakeup"]):
                 continue;
@@ -888,8 +962,11 @@ def recover_sm_transition(state_list, smg, IFcode):
         # does not include the last function call (will be done by "redo")
         # back_edges.pop()
         
+        #print(creation_v["name"])
         #print(other_v["name"])
         #print(back_edges)
+        #print()
+        
         _tmp = transition_code.replace("IDL_current_state", state_list[0])
         _tmp = _tmp.replace("IDL_next_state", item)
                 
@@ -919,53 +996,6 @@ def recover_sm_transition(state_list, smg, IFcode):
     code = code.replace("IDL_state_transition;", rec_code)
     IFcode['global']["BLOCK_CLI_IF_CALL_DESC_UPDATE"] = code
     
-
-#===============================================================================
-#     for edge in smg.es:
-#         tmp_dict = {}      
-#         if (edge["retcode"] == "faulty" or
-#             smg.vs(edge.source)["name"][0] == "state_null"):
-#             continue
-#         else:
-#             before = smg.vs(edge.source)["name"][0]
-#             after  = smg.vs(edge.target)["name"][0] 
-#             
-#             # NOTE: this should be taken care by the BLOCK_CLI_IF_RECOVER
-#             # ********************************************************************
-#             # first: add the edge to the initial state (recreated by the creation)
-#             # ********************************************************************
-#             #rec_edge = smg.es.select(_source = edge.source, _target=creation_v.index)
-#             #tmp_dict["rec_init"] = (rec_edge["func"], creation_v["name"])
-#             #print(rec_edge["func"])
-# 
-#             # NOTE: this will any necessary edge (function) along the rec path. 
-#             #       if the creation can reach the target directly, this can be none 
-#             # ********************************************************************
-#             # second: check if there is a reachable path from the initial state
-#             #         back to the target state (the one failed to transit to)
-#             # ********************************************************************
-#             back_edges = smg.get_shortest_paths(creation_v.index, edge.target, 
-#                                                 mode = 'OUTPUT', output="epath")
-#             
-#             
-#             #print(edge.target)
-#             #print(back_edges)
-#             #print(smg.es[1]["func"])
-#             
-#             # does not include the last function call (will be done by "redo")
-#             back_edges.pop()
-#             
-#             for _eidx in back_edges:
-#                 if (_eidx):
-#                     recfn_list = []
-#                     for eid in _eidx:
-#                         recfn_list.append((smg.es[eid]["func"], 
-#                                            smg.vs(smg.es[eid].target)["name"][0]))
-#                     tmp_dict["rec_steps"] = recfn_list   # TODO: append these together
-#         
-#         # now we have all edges to rebuild the state for current state transition (this edge)            
-#         rec_path[(before, after)] = tmp_dict
-#===============================================================================
     #===========================================================================
     #     
     #     # add the creation function (only one creation function)
@@ -1118,7 +1148,9 @@ def construct_server_code(result, IFcode):
     #     server_code = extern_fn + server_code
 
     # the service is using the lock service (use optimized client lock)
-    if (keywords.final_output == True and "lock_take" in IFcode["lock_take_func"]):
+    if (keywords.final_output == True 
+        and "lock_take_func" in IFcode 
+        and "lock_take" in IFcode["lock_take_func"]):
         lock_header = '''
         #include <cos_synchronization.h>
         extern IDL_lock_name
@@ -1136,6 +1168,12 @@ def construct_server_code(result, IFcode):
     if (keywords.service_name == "ramfs"):
         server_code = keywords.ser_treadp_str + server_code
     
+    # for example, mem_mgr has the nameserver valloc and evt has the nameserver evt_ns
+    if (keywords.service_name in keywords.nameserver):
+        server_code = server_code.replace("IDL_nameserver_recover_call", keywords.nameserver[keywords.service_name])
+    # replace the type of desc id
+    server_code = server_code.replace("IDLidtype", final_id_type)
+    server_code = server_code.replace("IDLparentidtype", final_parent_id_type)
     #print(server_code)
     #exit()
     return server_code
@@ -1216,6 +1254,8 @@ def construct_client_code(result, IFcode):
     result_code = result_code.replace("IDL_server_id", "server_" + final_id)
     if ("desc_parent id" in IFcode["trackds"]):
         result_code = result_code.replace("IDL_parent_id", final_parent_id)
+    if ("desc_parent component" in IFcode["trackds"]):
+        result_code = result_code.replace("IDL_parent_spd", final_parent_id)
 
     if (keywords.final_output == True):
         result_code = result_code.replace("IDL_init_maps", keywords.init_map_str)
@@ -1224,10 +1264,19 @@ def construct_client_code(result, IFcode):
 
     # for example, desc_maps now changes to ILD_service_desc_maps
     result_code = result_code.replace("IDL_service", keywords.service_name)
+    
+    # for example, mem_mgr has the nameserver valloc and evt has the nameserver evt_ns
+    if (keywords.service_name in keywords.nameserver):
+        result_code = result_code.replace("IDL_nameserver_recover_call", keywords.nameserver[keywords.service_name])
 
     if (marshalling_flag == True):
         result_code = keywords.para_save_str + result_code
     
+    # replace the type of desc id
+    
+    result_code = result_code.replace("IDLidtype", final_id_type)
+    result_code = result_code.replace("IDLparentidtype", final_parent_id_type)
+
     #exit()
     return result_code
 
@@ -1252,11 +1301,16 @@ def construct_s_stub_code(result, IFcode):
     # here we hard code the other non IDL entries (for Composite compiling purpose)
     if (keywords.service_name == "evt"):
         result_code = result_code + keywords.evt_norm_stub_S_str
+    if (keywords.service_name == "mem_mgr"):
+        result_code = result_code + keywords.mm_norm_stub_S_str
     
     if ("BLOCK_CLI_IF_UPCALL_CREATOR" in IFcode["global"]):
-        result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name\
+        if (not desc_close_subtree):  # for example, mem_mgr does not have mman_upcall_creater
+            result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name\
                                     +"_upcall_creator)" 
     #print(result_code)
+    #print(keywords.service_name)
+    #exit()
     return result_code
     
 def write_code_to_file(code, output_file):
@@ -1304,8 +1358,7 @@ def paste_idl_code(result, IFcode):
     #sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
     #sname = result.gvars["global_info"]["service_name"]
     sname = keywords.service_name
-    #print(sname)
-    
+
     if (keywords.final_output == True):
         sname = "final_" + sname
 
@@ -1348,25 +1401,23 @@ def idl_generate(result, parsed_ast):
     # pprint (result.tuple[0].functions[3].info)
     # exit()
     #===========================================================================
-    #exit()
-    
+
     #keywords.read_from_template_code(IFcode)    
     IFDesc = (globaldescp, funcdescps)
-    
+
     # build blocks and descriptions
     generate_description(result, funcdescps, globaldescp) 
     init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, global_nonfun_blocks)
-    #pprint(globaldescp)
-    #exit()
+    #pprint(funcdescps)
     # evaluate the conditions and generate block code
     generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode)
-    generate_globalvas(result, IFcode)
     
+    generate_globalvas(result, IFcode)
     # server side code
     generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode)
     # client side code
     generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks)
-
+    
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
 

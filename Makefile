@@ -9,9 +9,9 @@ FS_SERVICE=ramfs
 LOCK_SERVICE=lock
 EVT_SERVICE=evt
 SCHED_SERVICE=sched
-MM_SERVICE=mm
+MM_SERVICE=mem_mgr
 MBOX_SERVICE=mbox
-TE_SERVICE=te
+PTE_SERVICE=periodic_wake
 SCHED_SERVICE=sched
 
 ##############
@@ -26,6 +26,12 @@ all_lock: parse_lock compile_lock gen_lock cp_lock plot_lock
 
 all_evt: parse_evt compile_evt gen_evt cp_evt plot_evt
 
+all_sched: parse_sched compile_sched gen_sched cp_sched plot_sched
+
+all_mem_mgr: parse_mem_mgr compile_mem_mgr gen_mem_mgr cp_mem_mgr plot_mem_mgr
+
+all_periodic_wake: parse_periodic_wake compile_periodic_wake gen_periodic_wake cp_periodic_wake plot_periodic_wake
+
 
 # everything with the benchmark
 all_bench: parse_all compile_all gen_all_bench cp_all
@@ -36,10 +42,16 @@ all_lock_bench: parse_lock compile_lock gen_lock_bench cp_lock plot_lock
 
 all_evt_bench: parse_evt compile_evt gen_evt_bench cp_evt plot_evt
 
+all_sched_bench: parse_sched compile_sched gen_sched_bench cp_sched plot_sched
+
+all_mem_mgr_bench: parse_mem_mgr compile_mem_mgr gen_mem_mgr_bench cp_mem_mgr plot_mem_mgr
+
+all_periodic_wake_bench: parse_periodic_wake compile_periodic_wake gen_periodic_wake_bench cp_periodic_wake plot_periodic_wake
+
 ##############
 ## parsing
 ##############
-parse_all: parse_ramfs parse_lock parse_evt
+parse_all: parse_ramfs parse_lock parse_evt parse_mem_mgr parse_periodic_wake
 	@echo
 
 parse_ramfs:
@@ -62,10 +74,20 @@ parse_sched:
 	@echo "IDL process starting.... <<<"$(SCHED_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h
 
+parse_mem_mgr:
+	@echo
+	@echo "IDL process starting.... <<<"$(MM_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(MM_SERVICE).h
+
+parse_periodic_wake:
+	@echo
+	@echo "IDL process starting.... <<<"$(PTE_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(PTE_SERVICE).h
+
 ##############
 ## compiling
 ##############
-compile_all: compile_ramfs compile_lock compile_evt compile_sched
+compile_all: compile_ramfs compile_lock compile_evt compile_sched compile_mem_mgr compile_periodic_wake
 	@echo
 
 compile_ramfs:
@@ -96,10 +118,24 @@ compile_sched:
 	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
+compile_mem_mgr:
+	@echo
+	@echo "Compiling starting.... <<<"$(MM_SERVICE)">>>"
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_c_stub.c
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_s_cstub.c
+	rm output/$(TMP_OUTPUT)
+
+compile_periodic_wake:
+	@echo
+	@echo "Compiling starting.... <<<"$(PTE_SERVICE)">>>"
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_c_stub.c
+	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_s_cstub.c
+	rm output/$(TMP_OUTPUT)
+
 ########################################################
 ## generate the acutal interface code w/ ubenchmark
 ########################################################
-gen_all_bench: gen_ramfs_bench gen_lock_bench gen_evt_bench
+gen_all_bench: gen_ramfs_bench gen_lock_bench gen_evt_bench gen_sched_bench gen_mem_mgr_bench gen_periodic_wake_bench
 	@echo
 
 gen_ramfs_bench:
@@ -117,10 +153,25 @@ gen_evt_bench:
 	@echo "IDL process starting.... <<<"$(EVT_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(EVT_SERVICE).h bench
 
+gen_sched_bench:
+	@echo
+	@echo "IDL process starting.... <<<"$(SCHED_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h bench
+
+gen_mem_mgr_bench:
+	@echo
+	@echo "IDL process starting.... <<<"$(MM_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(MM_SERVICE).h bench
+
+gen_periodic_wake_bench:
+	@echo
+	@echo "IDL process starting.... <<<"$(PTE_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(PTE_SERVICE).h bench
+
 ########################################################
 ## generate the acutal interface code for Composite
 ########################################################
-gen_all: gen_ramfs gen_lock gen_evt
+gen_all: gen_ramfs gen_lock gen_evt gen_sched gen_mem_mgr gen_periodic_wake
 	@echo
 
 gen_ramfs:
@@ -138,10 +189,25 @@ gen_evt:
 	@echo "IDL process starting.... <<<"$(EVT_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(EVT_SERVICE).h final
 
+gen_sched:
+	@echo
+	@echo "IDL process starting.... <<<"$(SCHED_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h final
+
+gen_mem_mgr:
+	@echo
+	@echo "IDL process starting.... <<<"$(MM_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(MM_SERVICE).h final
+
+gen_periodic_wake:
+	@echo
+	@echo "IDL process starting.... <<<"$(PTE_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(PTE_SERVICE).h final
+
 ######################################################################
 ## copy the generated files to the Compoiste interface(symbolink further)
 ######################################################################
-cp_all: cp_ramfs cp_lock cp_evt
+cp_all: cp_ramfs cp_lock cp_evt cp_sched cp_mem_mgr cp_periodic_wake
 
 cp_ramfs:
 	cp output/final_$(FS_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/rtorrent/__stubs_rec_ramfs/__IDL_c_stub.c
@@ -158,10 +224,25 @@ cp_evt:
 	cp output/final_$(EVT_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(EVT_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__stubs_rec/__IDL_s_stub.S
 
+cp_sched:
+	cp output/final_$(SCHED_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_c_stub.c
+	cp output/final_$(SCHED_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_s_cstub.c
+	cp output/final_$(SCHED_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_s_stub.S
+
+cp_mem_mgr:
+	cp output/final_$(MM_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_c_stub.c
+	cp output/final_$(MM_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_s_cstub.c
+	cp output/final_$(MM_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_s_stub.S
+
+cp_periodic_wake:
+	cp output/final_$(PTE_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_c_stub.c
+	cp output/final_$(PTE_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_s_cstub.c
+	cp output/final_$(PTE_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_s_stub.S
+
 #######################
 ## plot SM transition
 #######################
-plot_all: plot_ramfs plot_lock
+plot_all: plot_ramfs plot_lock plot_evt plot_sched plot_mem_mgr plot_periodic_wake
 	@echo
 
 plot_ramfs:
@@ -178,6 +259,21 @@ plot_evt:
 	@echo
 	@echo "Plotting SM graph for.... <<<"$(EVT_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(EVT_SERVICE).h graph
+
+plot_sched:
+	@echo
+	@echo "Plotting SM graph for.... <<<"$(SCHED_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h graph
+
+plot_mem_mgr:
+	@echo
+	@echo "Plotting SM graph for.... <<<"$(MM_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(MM_SERVICE).h graph
+
+plot_periodic_wake:
+	@echo
+	@echo "Plotting SM graph for.... <<<"$(PTE_SERVICE)">>>"
+	$(PYTHON) $(PARSER) input/cidl_$(PTE_SERVICE).h graph
 
 ###################
 ## clean all files

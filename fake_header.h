@@ -37,6 +37,14 @@ int tmp;
 #define cslab_alloc_sched_slab() NULL
 #define cslab_free_sched_slab(x) NULL
 
+#define mem_mgr_desc_maps tmp
+#define cslab_alloc_mem_mgr_slab() NULL
+#define cslab_free_mem_mgr_slab(x) NULL
+
+#define periodic_wake_desc_maps tmp
+#define cslab_alloc_periodic_wake_slab() NULL
+#define cslab_free_periodic_wake_slab(x) NULL
+
 int hahalock = 10;
 #define evt_lock hahalock
 #define lock_take(x) 
@@ -124,6 +132,14 @@ int evt_wait(){}
 int evt_trigger(){}
 int evt_free(){}
 
+int mman_get_page_exist() {}
+int __mman_alias_page() {}
+void call_recover_upcall(int dest_spd, int id, int type){}
+int valloc_upcall() {}
+
+int periodic_wake_create(){}
+int periodic_wake_create_exist(){}
+
 #define BUG(); {;}
 #define EINVAL 0
 #define extern 
@@ -133,7 +149,10 @@ int cbuf2buf(){}
 #include <string.h>
 
 #define ELOOP 0
-
+#define ECHILD 0
+#define COS_UPCALL_RECOVERY 0
+#define COS_UPCALL_RECOVERY_SUBTREE 0
+#define COS_UPCALL_REMOVE_SUBTREE 0
 #define cos_get_thd_id() 0
 
 #endif /* _cos_fake_header_h */

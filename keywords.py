@@ -25,7 +25,8 @@ final_output = False
 bench = False
 
 # define the root id for all services (even the service does not have dependency)
-rootid = {"ramfs":"1", "evt":"0", "lock":"0"}
+rootid = {"ramfs":"1", "evt":"0", "lock":"0", "mem_mgr":"0", "periodic_wake":"0"}
+nameserver = {"evt":"ns_upcall", "mem_mgr":"valloc_upcall"}
 
 # the keywords must be consistent with ones defined in cidl_gen (macro in cidl_gen)
 class IDLBlock(object):
@@ -373,6 +374,9 @@ def build_blk_code(cfblk, sfblk, gblk, marshallingblk, gblk_nonfunc):
 def get_lock_function(IFcode, service_name):
     composite_path = '/home/songjiguo/research/composite/src'   
     
+    if (service_name == "periodic_wake" or service_name == "ramfs"):
+        return
+    
     if (service_name != "sched"): 
         cmd = 'find ' + composite_path + " -name " + service_name + ".c"
         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
@@ -383,7 +387,7 @@ def get_lock_function(IFcode, service_name):
             if ("_grp" in item): # hack for edge and edge_grp (start with this now)
                 path = item
     elif (service_name == "sched"):
-        path = composite_path + "/components/implementation/"+service_name+"/cos_sched_base.c"
+        path = composite_path + "/components/implementation/sched/cos_sched_base.c"
     else:
         path = path.split("\n")[0]  # there might be more than one file (e.g., evt.c)
 
@@ -392,7 +396,6 @@ def get_lock_function(IFcode, service_name):
     p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
     code, err = p.communicate()
     IFcode["lock_take_func"] = code.replace("\\","")
-    exit()
 
     cmd = 'sed -nr \"/\<lock release start\>/{:a;n;/'\
           '\<lock release end\>/b;p;ba} \" ' + path
@@ -517,6 +520,12 @@ cos_asm_server_stub_spdid(evt_set_prio)
 cos_asm_server_stub_spdid(evt_create) 
 cos_asm_server_stub_spdid(evt_stats) 
 cos_asm_server_stub_spdid(evt_stats_len)
+'''
+
+mm_norm_stub_S_str = '''
+cos_asm_server_stub_spdid(mman_release_page)
+cos_asm_server_stub_spdid(mman_get_page_exist)
+cos_asm_server_stub_spdid(mman_reflect)
 '''
 
 slab_alloc_str = '''

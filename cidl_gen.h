@@ -86,6 +86,7 @@ struct usr_inv_cap {int a;};
 #define desc(x) __desc(x)
 //#define desc(x) CD_desc_lookup_CD_##x
 
+#define parent_desc_component(x) parent_desc_component_CD_##x
 #define parent_desc(x) parent_desc_CD_##x
 #define ret(x) _retval_##x
 #define desc_data_retval(x, y)				\

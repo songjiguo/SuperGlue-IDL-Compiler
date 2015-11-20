@@ -1,7 +1,7 @@
 #include "cidl_gen.h"
 
 struct track_block {
-	int lock_id;
+	ul_t lock_id;
 	struct track_block *next, *prev;
 };
 struct track_block tracking_block_list[MAX_NUM_SPDS];

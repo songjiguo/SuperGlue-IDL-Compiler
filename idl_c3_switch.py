@@ -14,14 +14,23 @@ import os, sys, argparse
 #print 'Argument list:', str(sys.argv)
 #exit()
 
+# how to use this file --
+# exmaple: python idl_c3_switch.py cos evt
+# exmaple: python idl_c3_switch.py idl lock
+# exmaple: python idl_c3_switch.py man sched
+
 ramfs_if_path   = "/home/songjiguo/research/composite/src/components/interface/rtorrent/"
 ramfs_path      = ramfs_if_path + "stubs/"
 lock_if_path    = "/home/songjiguo/research/composite/src/components/interface/lock/"
 lock_path       = lock_if_path + "stubs/"
-evt_if_path    = "/home/songjiguo/research/composite/src/components/interface/evt/"
-evt_path       = evt_if_path + "stubs/"
-sched_if_path    = "/home/songjiguo/research/composite/src/components/interface/sched/"
+evt_if_path     = "/home/songjiguo/research/composite/src/components/interface/evt/"
+evt_path        = evt_if_path + "stubs/"
+sched_if_path   = "/home/songjiguo/research/composite/src/components/interface/sched/"
 sched_path      = sched_if_path + "stubs/"
+mem_mgr_if_path = "/home/songjiguo/research/composite/src/components/interface/mem_mgr/"
+mem_mgr_path    = mem_mgr_if_path + "stubs/"
+periodic_wake_if_path  = "/home/songjiguo/research/composite/src/components/interface/periodic_wake/"
+periodic_wake_path      = periodic_wake_if_path + "stubs/"
 
 path = ""
 
@@ -37,12 +46,15 @@ elif (sys.argv[2] == "lock"):
     REFLECTION_S_STUB_DIR = sched_path
 else:
     REFLECTION_S_STUB_DIR = ""
+
+REFLECTION_S_STUB_DIR = ""   
+
     
 if (sys.argv[1] != "cos" and sys.argv[1] != "idl" and sys.argv[1] != "man"):
     print ("wrong mode!!!")
     exit()
 
-if (sys.argv[2] != "ramfs" and sys.argv[2] != "lock" and sys.argv[2] != "evt"):
+if (sys.argv[2] != "ramfs" and sys.argv[2] != "lock" and sys.argv[2] != "evt" and sys.argv[2] != "sched" and sys.argv[2] != "mem_mgr" and sys.argv[2] != "periodic_wake"):
     print ("wrong service!!!")
     exit()
 
@@ -54,6 +66,12 @@ if (sys.argv[1] == "cos"):
         path = ramfs_if_path
     elif (sys.argv[2] == "evt"):
         path = evt_if_path
+    elif (sys.argv[2] == "sched"):
+        path = sched_if_path
+    elif (sys.argv[2] == "mem_mgr"):
+        path = mem_mgr_if_path
+    elif (sys.argv[2] == "periodic_wake"):
+        path = periodic_wake_if_path
     else:
         path = ""
 elif (sys.argv[1] == "idl" or sys.argv[1] == "man"):
@@ -66,6 +84,15 @@ elif (sys.argv[1] == "idl" or sys.argv[1] == "man"):
     elif (sys.argv[2] == "evt"):
         COS_STUB_DIR = "__stubs_rec"
         path = evt_if_path
+    elif (sys.argv[2] == "sched"):
+        COS_STUB_DIR = "__stubs_rec"
+        path = sched_if_path
+    elif (sys.argv[2] == "mem_mgr"):
+        COS_STUB_DIR = "__stubs_rec"
+        path = mem_mgr_if_path
+    elif (sys.argv[2] == "periodic_wake"):
+        COS_STUB_DIR = "__stubs_rec"
+        path = periodic_wake_if_path
     else:
         path = ""
 
@@ -76,11 +103,11 @@ if not COS_STUB_DIR:
 
 print("[[[ "+ sys.argv[2] + " in "+ sys.argv[1] + " mode ]]]")
 
-#print("stub path :" + path)
-#print("stub for the mode "+ sys.argv[1] + " :"  + COS_STUB_DIR)
-#print("reflection on stub: "+REFLECTION_S_STUB_DIR)
+print("stub path :" + path)
+print("stub for the mode " + sys.argv[1] + " :"  + COS_STUB_DIR)
+print("reflection on stub: "+ REFLECTION_S_STUB_DIR)
 os.chdir(path)
-#exit()
+exit()
 
 IDL_SCSTUB = "__IDL_s_cstub.c"
 IDL_CSTUB  = "__IDL_c_stub.c"

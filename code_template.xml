@@ -9,9 +9,40 @@
 <!--***********************************************************************-->
   <interface name="client interface">
     <block name="block_cli_if_call_desc_update"><!-- <<<<<<<< block_cli_if_call_desc_update >>>>>>>>>-->
-      <predicate name="not desc_global or (desc_global and not desc_dep_create_none)">
+      <predicate name="not desc_global">
 	<code><![CDATA[
-static inline struct desc_track *call_desc_update(int id, int next_state) {
+static inline struct desc_track *call_desc_update(IDLidtype id, int next_state) {
+	struct desc_track *desc = NULL;
+	unsigned int from_state = 0;
+	unsigned int to_state = 0;
+
+	if (id == IDL_root_id) return NULL;
+
+        desc = call_desc_lookup(id);
+	if (unlikely(!desc)) goto done;
+
+	desc->next_state = next_state;
+
+	if (likely(desc->fault_cnt == global_fault_cnt)) goto done;
+	/* desc->fault_cnt = global_fault_cnt; */
+
+	// State machine transition under the fault
+	block_cli_if_recover(id);
+	from_state       = desc->state;
+	to_state         = next_state;
+
+	IDL_state_transition;
+
+done:	
+	return desc;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="desc_global and not desc_dep_create_none">
+	<code><![CDATA[
+static inline struct desc_track *call_desc_update(IDLidtype id, int next_state) {
 	struct desc_track *desc = NULL;
 	unsigned int from_state = 0;
 	unsigned int to_state = 0;
@@ -42,10 +73,11 @@ done:
 	]]>
 	</code>
       </predicate>
-      
+
+      <!--for example, scheduler-->
       <predicate name="desc_global and desc_dep_create_none">
 	<code><![CDATA[
-static inline struct desc_track *call_desc_update(int id, int next_state) {
+static inline struct desc_track *call_desc_update(IDLidtype id, int next_state) {
 	struct desc_track *desc = NULL;
 	unsigned int from_state = 0;
 	unsigned int to_state = 0;
@@ -104,7 +136,7 @@ struct __ser_IDL_fname_marshalling {
 
 
     <block name="block_cli_if_tracking_map_ds"> <!-- <<< block_cli_if_tracking_map_ds>>>>>-->
-      <predicate name="not desc_global">
+      <predicate name="not desc_global and create_new_id">
 	<code><![CDATA[
 COS_MAP_CREATE_STATIC(IDL_service_desc_maps);
 CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
@@ -112,7 +144,7 @@ CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
 	</code>
       </predicate>
 
-      <predicate name="desc_global">
+      <predicate name="desc_global or (not create_new_id)">
 	<code><![CDATA[
 CVECT_CREATE_STATIC(IDL_service_desc_maps);
 CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
@@ -124,7 +156,7 @@ CSLAB_CREATE(IDL_service_slab, sizeof(struct desc_track));
     
 
     <block name="block_cli_if_map_init"><!-- <<<<<<<< block_cli_if_map_init >>>>>>>>>-->
-      <predicate name="not desc_global or (desc_global and not desc_dep_create_none)">
+      <predicate name="not desc_global and create_new_id">
 	<code><![CDATA[
 static inline void call_map_init() {
 	if (unlikely(!first_map_init)) {
@@ -137,9 +169,14 @@ static inline void call_map_init() {
 	</code>
       </predicate>
 
-      <predicate name="desc_global and desc_dep_create_none">
+      <predicate name="desc_global or (not create_new_id)">
 	<code><![CDATA[
 static inline void call_map_init() {
+	if (unlikely(!first_map_init)) {
+		first_map_init = 1;
+		cvect_init_static(&IDL_service_desc_maps);
+	}
+	return;
 }
 	]]>
 	</code>
@@ -149,15 +186,15 @@ static inline void call_map_init() {
 
 
     <block name="block_cli_if_tracking_map_fn"><!-- <<<<<<<<  block_cli_if_tracking_map_fn >>>>>>>>> -->
-      <predicate name="not desc_global">
+      <predicate name="not desc_global and create_new_id">
 	<code><![CDATA[
-static inline struct desc_track *call_desc_lookup(int id) {
+static inline struct desc_track *call_desc_lookup(IDLidtype id) {
 	 return (struct desc_track *)cos_map_lookup(&IDL_service_desc_maps, id);
 }
 
 static inline struct desc_track *call_desc_alloc() {
 	struct desc_track *desc = NULL;
-	int map_id = 0;
+	IDLidtype map_id = 0;
 
 	while(1) {
 		desc = cslab_alloc_IDL_service_slab();
@@ -173,7 +210,7 @@ static inline struct desc_track *call_desc_alloc() {
 
 static inline void call_desc_dealloc(struct desc_track *desc) {
 	assert(desc);
-	int id = desc->IDL_id;
+	IDLidtype id = desc->IDL_id;
 	desc->IDL_server_id = -1;  // reset to -1
 	assert(desc);
 	cslab_free_IDL_service_slab(desc);
@@ -184,18 +221,18 @@ static inline void call_desc_dealloc(struct desc_track *desc) {
 	</code>
       </predicate>
 
-      <predicate name="desc_global">
+      <predicate name="(desc_global or not create_new_id) and (not desc_dep_create_diff)">
 	<code><![CDATA[
-static inline struct desc_track *call_desc_lookup(int id) {
+static inline struct desc_track *call_desc_lookup(IDLidtype id) {
 	 return (struct desc_track *)cvect_lookup(&IDL_service_desc_maps, id);
 }
 
-static inline struct desc_track *call_desc_alloc(int id) {
+static inline struct desc_track *call_desc_alloc(IDLidtype id) {
 	struct desc_track *desc = NULL;
 	desc = cslab_alloc_IDL_service_slab();
 	assert(desc);
 	desc->IDL_id  = id;
-	cvect_add(&IDL_service_desc_maps, desc, id);
+	if (cvect_add(&IDL_service_desc_maps, desc, id)) assert(0);
 	return desc;
 }
 
@@ -208,10 +245,37 @@ static inline void call_desc_dealloc(struct desc_track *desc) {
 	]]>
 	</code>
       </predicate>
+
+      <!--for example, mem_mgr we use addree to index-->
+      <predicate name="(desc_global or not create_new_id) and desc_dep_create_diff">
+	<code><![CDATA[
+static inline struct desc_track *call_desc_lookup(IDLidtype id) {
+	 return (struct desc_track *)cvect_lookup(&IDL_service_desc_maps, (id >> PAGE_SHIFT) & 0xFFF);
+}
+
+static inline struct desc_track *call_desc_alloc(IDLidtype id) {
+	struct desc_track *desc = NULL;
+	desc = cslab_alloc_IDL_service_slab();
+	assert(desc);
+	desc->IDL_id  = id;
+	if (cvect_add(&IDL_service_desc_maps, desc, (id >> PAGE_SHIFT)& 0xFFF)) assert(0);
+	return desc;
+}
+
+static inline void call_desc_dealloc(struct desc_track *desc) {
+	assert(desc);
+	if (cvect_del(&IDL_service_desc_maps, (desc->IDL_id >> PAGE_SHIFT) & 0xFFF)) assert(0);
+	cslab_free_IDL_service_slab(desc);
+	return;
+}
+	]]>
+	</code>
+      </predicate>
+
     </block>
 
     <block name="block_cli_if_invoke"> <!--<<<<<<<< block_cli_if_invoke >>>>>>>>>-->
-      <predicate name="creation and (not desc_dep_create_none)">
+      <predicate name="creation and desc_dep_create_same">
 	<code><![CDATA[
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	struct desc_track *parent_desc = NULL;
@@ -220,6 +284,20 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 	} /* else {  	// td_root, or in a different component */
 	/* 	IDL_parent_id = IDL_parent_id; */
 	/* } */
+
+	long __fault = 0;
+	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
+	*fault = __fault;
+
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="creation and desc_dep_create_diff">
+	<code><![CDATA[
+static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 
 	long __fault = 0;
 	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
@@ -244,7 +322,7 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
       </predicate>
 
 
-      <predicate name="(transition or terminal) and desc_global and (not desc_dep_create_none)">
+      <predicate name="(transition or terminal) and desc_global and desc_dep_create_same">
 	<code><![CDATA[
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	long __fault = 0;
@@ -268,6 +346,19 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 	</code>
       </predicate>
 
+      <predicate name="(terminal or transition) and desc_global and desc_close_subtree
+		       and desc_dep_create_diff">
+	<code><![CDATA[
+static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
+	long __fault = 0;
+	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
+	*fault = __fault;
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
       <predicate name="(transition or terminal) and desc_global and desc_dep_create_none">
 	<code><![CDATA[
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
@@ -281,7 +372,8 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 	</code>
       </predicate>
 
-      <predicate name="(transition or terminal) and (not desc_global)">
+      <predicate name="(transition or terminal) and (not desc_global)
+	and create_new_id">
 	<code><![CDATA[
 static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
 	long __fault = 0;
@@ -295,6 +387,23 @@ static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fau
 	]]>
 	</code>
       </predicate>
+
+      <predicate name="(transition or terminal) and (not desc_global)
+	and not create_new_id">
+	<code><![CDATA[
+static inline int block_cli_if_invoke_IDL_fname(IDL_parsdecl, int ret, long *fault, struct usr_inv_cap *uc) {
+	long __fault = 0;
+	struct desc_track *desc = call_desc_lookup(cos_get_thd_id());
+
+	CSTUB_INVOKE(ret, __fault, uc, IDL_pars_len, IDL_params);
+	*fault = __fault;
+
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
     </block>
 
     <block name="block_cli_if_invoke_marshalling"><!--<<<<<<<< block_cli_if_invoke_marshalling >>>>>>>>>-->
@@ -391,8 +500,24 @@ static inline void block_cli_if_desc_update_IDL_fname() {
 
       <predicate name="creation and (not desc_dep_create_none)">
 	<code><![CDATA[
-static inline void block_cli_if_desc_update_IDL_fname(int id) {
+static inline void block_cli_if_desc_update_IDL_fname(IDLidtype id) {
 	call_desc_update(id, state_IDL_fname);
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="transition and desc_global and desc_dep_create_diff">
+	<code><![CDATA[
+static inline void block_cli_if_desc_update_IDL_fname(IDLidtype id, IDLparentidtype parent_id) {
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="transition and desc_global and desc_dep_create_same">
+	<code><![CDATA[
+static inline void block_cli_if_desc_update_IDL_fname(IDLidtype id) {
 }
 	]]>
 	</code>
@@ -400,14 +525,14 @@ static inline void block_cli_if_desc_update_IDL_fname(int id) {
 
       <predicate name="(terminal or transition) and (not desc_global)">
 	<code><![CDATA[
-static inline void block_cli_if_desc_update_IDL_fname(int id) {
+static inline void block_cli_if_desc_update_IDL_fname(IDLidtype id) {
 	call_desc_update(id, state_IDL_fname);
 }
 	]]>
 	</code>
       </predicate>
 
-      <predicate name="transition and desc_global">
+      <predicate name="transition and desc_global and desc_dep_create_none">
 	<code><![CDATA[
 static inline void block_cli_if_desc_update_IDL_fname() {
 }
@@ -417,7 +542,7 @@ static inline void block_cli_if_desc_update_IDL_fname() {
 
       <predicate name="terminal">
 	<code><![CDATA[
-static inline void block_cli_if_desc_update_IDL_fname(int id) {
+static inline void block_cli_if_desc_update_IDL_fname(IDLidtype id) {
 	call_desc_update(id, state_IDL_fname);
 }
 	]]>
@@ -457,7 +582,7 @@ static inline int block_cli_if_desc_update_post_fault_IDL_fname() {
     <block name="block_cli_if_recover"><!--<<<<<<<< block_cli_if_recover >>>>>>>>>-->
       <predicate name="desc_global">
 	<code><![CDATA[
-static inline void block_cli_if_recover(int id) {
+static inline void block_cli_if_recover(IDLidtype id) {
 	/* spdid_t creater_component; */
 	
 	/* assert(id); */
@@ -465,7 +590,7 @@ static inline void block_cli_if_recover(int id) {
 	/* assert(creater_component); */
 	
 	/* if (creater_component != cos_spd_id()) { */
-	/* 	call_recover_upcall(creater_component, id); */
+	/* 	call_recover_call_nameserver(creater_component, id, type); */
 	/* } else { */
 	/* 	block_cli_if_basic_id(id); */
 	/* } */
@@ -477,7 +602,7 @@ static inline void block_cli_if_recover(int id) {
 
       <predicate name="not desc_global">
 	<code><![CDATA[
-static inline void block_cli_if_recover(int id) {
+static inline void block_cli_if_recover(IDLidtype id) {
 	block_cli_if_basic_id(id);
 }
 	]]>
@@ -489,7 +614,7 @@ static inline void block_cli_if_recover(int id) {
     <block name="block_cli_if_basic_id"><!--<<<<<<<< block_cli_if_basic_id >>>>>>>>>-->
       <predicate name="desc_dep_create_same and not desc_global">
 	<code><![CDATA[
-static inline void block_cli_if_basic_id(int id) {
+static inline void block_cli_if_basic_id(IDLidtype id) {
 	assert(id);
 	struct desc_track *desc = call_desc_lookup(id);
 	assert(desc);
@@ -515,9 +640,70 @@ again:
 	</code>
       </predicate>
 
-      <predicate name="desc_dep_create_same and desc_global">
+      <predicate name="desc_dep_create_none and not desc_global and create_new_id">
 	<code><![CDATA[
-static inline void block_cli_if_basic_id(int id) {
+static inline void block_cli_if_basic_id(IDLidtype id) {
+
+	assert(id);
+	struct desc_track *desc = call_desc_lookup(id);
+	assert(desc);
+	
+	int retval = 0;
+	retval = IDL_fname(IDL_desc_saved_params);
+	assert(retval);
+
+	struct desc_track *new_desc = call_desc_lookup(retval);
+	assert(new_desc);
+	
+	desc->IDL_server_id = new_desc->IDL_server_id;
+	desc->state = IDL_init_state;       // set the state to the initial state
+	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
+
+	call_desc_dealloc(new_desc);
+	block_cli_if_recover_data(desc);
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="desc_dep_create_none and not desc_global and not create_new_id">
+	<code><![CDATA[
+static inline void block_cli_if_basic_id(IDLidtype id) {
+
+	assert(id);
+	struct desc_track *desc = call_desc_lookup(id);
+	assert(desc);
+	
+	int retval = 0;
+	retval = IDL_fname_exist(IDL_desc_saved_params);
+	assert(retval);
+
+	struct desc_track *new_desc = call_desc_lookup(retval);
+	assert(new_desc);
+	
+	desc->state = IDL_init_state;       // set the state to the initial state
+	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
+
+	call_desc_dealloc(new_desc);
+	block_cli_if_recover_data(desc);
+}
+	]]>
+	</code>
+      </predicate>
+
+
+      <!--for example, scheduler-->
+      <predicate name="desc_dep_create_none and desc_global">
+	<code><![CDATA[
+static inline void block_cli_if_basic_id(IDLidtype id) {
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="desc_dep_create_same and desc_global and create_new_id">
+	<code><![CDATA[
+static inline void block_cli_if_basic_id(IDLidtype id) {
 	assert(id);
 	struct desc_track *desc = call_desc_lookup(id);
 	assert(desc);
@@ -542,10 +728,10 @@ again:
 	</code>
       </predicate>
 
-      <predicate name="desc_dep_create_none and not desc_global">
+      <!--for example, mem_mgr might need upcall, so no goto again-->
+      <predicate name="desc_dep_create_diff and desc_global">
 	<code><![CDATA[
-static inline void block_cli_if_basic_id(int id) {
-
+static inline void block_cli_if_basic_id(IDLidtype id) {
 	assert(id);
 	struct desc_track *desc = call_desc_lookup(id);
 	assert(desc);
@@ -554,102 +740,18 @@ static inline void block_cli_if_basic_id(int id) {
 	retval = IDL_fname(IDL_desc_saved_params);
 	assert(retval);
 
-	struct desc_track *new_desc = call_desc_lookup(retval);
-	assert(new_desc);
-	
-	desc->IDL_server_id = new_desc->IDL_server_id;
 	desc->state = IDL_init_state;       // set the state to the initial state
 	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
-
-	call_desc_dealloc(new_desc);
 	block_cli_if_recover_data(desc);
 }
 	]]>
 	</code>
       </predicate>
 
-      <!--for example, scheduler-->
-      <predicate name="desc_dep_create_none and desc_global">
-	<code><![CDATA[
-static inline void block_cli_if_basic_id(int id) {
-}
-	]]>
-	</code>
-      </predicate>
-
     </block>
-
-
-    <block name="block_cli_if_upcall_creator"><!--<<<<<<<< block_cli_if_upcall_creator >>>>>>>>>-->
-      <predicate name="desc_global">
-	<code><![CDATA[
-static inline void block_cli_if_upcall_creator(int id) {
-	IDL_service_upcall_creator(cos_spd_id(), id);
-}
-	]]>
-	</code>
-      </predicate>
-
-      <predicate name="not desc_global">
-	<code><![CDATA[
-static inline void block_cli_if_upcall_creator(int id) {
-}
-	]]>
-	</code>
-      </predicate>
-    </block>
-    
-    <block name="block_cli_if_recover_upcall"><!--<<<<<<<< block_cli_if_recover_upcall >>>>>>>>>-->
-      <predicate name="desc_global and not desc_dep_create_none">
-	<code><![CDATA[
-static inline void block_cli_if_recover_upcall(int id) {
-	assert(id);
-	block_cli_if_recover(id);
-	block_cli_if_recover_subtree(id);
-}
-	]]>
-	</code>
-      </predicate>
-    </block>
-
-    <block name="block_cli_if_recover_subtree"><!--<<<<<<<< block_cli_if_recover_subtree >>>>>>>>>-->
-      <predicate name="terminal and desc_close_subtree and desc_dep_create_diff">
-	<code><![CDATA[
-static inline void block_cli_if_recover_subtree(int id) {
-	assert(id);
-	struct desc_track *desc = call_desc_lookup(id);
-	assert(desc);
-	
-	struct desc_track *child_desc_list = desc->child_desc_list;
-	
-	for ((child_desc) = FIRST_LIST((child_desc_list), next, prev) ;	  
-	     (child_desc) != (child_desc_list) ;
-	     (child_desc) = FIRST_LIST((child_desc), next, prev)) {
-		block_cli_if_basic_id(child_desc->id);
-		if (child_desc->dest_spd != cos_spd_id()) {
-			call_recover_upcall(child_desc->dest_spd, child_desc->id);
-		} else {
-			id = child_desc->id;
-			block_cli_if_recover_subtree(id);
-		}
-	}
-}
-	]]>
-	</code>
-      </predicate>
-
-      <predicate name="terminal and desc_close_self_only">
-	<code><![CDATA[
-static inline void block_cli_if_recover_subtree(int id) {
-}
-	]]>
-	</code>
-      </predicate>
-    </block>
-
 
     <block name="block_cli_if_track"><!--<<<<<<<< block_cli_if_track >>>>>>>>>-->
-      <predicate name="creation and not desc_global">
+      <predicate name="creation and not desc_global and create_new_id">
 	<code><![CDATA[
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	// if ret does not exist, just return as it is, thinking....
@@ -666,7 +768,23 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	</code>
       </predicate>
 
-      <predicate name="creation and desc_global">
+      <predicate name="creation and not desc_global and (not create_new_id)">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	if (ret == -EINVAL) return ret;
+
+	struct desc_track *desc = call_desc_alloc(cos_get_thd_id());
+	assert(desc);
+	call_desc_cons(desc, cos_get_thd_id(), IDL_params);
+	IDL_curr_state;
+
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="creation and desc_global and create_new_id ">
 	<code><![CDATA[
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	// if ret does not exist, just return as it is, thinking....
@@ -681,6 +799,91 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 }
 	]]>
 	</code>
+      </predicate>
+      
+      <!--for example, mman_get_page-->
+      <predicate name="creation and desc_global and not create_new_id">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="transition and not desc_global and create_new_id">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(IDL_id);
+	if (desc) { IDL_curr_state; }
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="transition and not desc_global and not create_new_id">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(cos_get_thd_id());
+	if (desc) { IDL_curr_state; }
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+
+      <predicate name="transition and desc_global and create_new_id">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+	struct desc_track *desc = call_desc_lookup(IDL_id);
+	if (desc) { IDL_curr_state; }
+        //testsetset
+	if (ret == -EINVAL) {
+		call_desc_update(IDL_id, state_IDL_fname);
+		ret = -ELOOP;
+	}
+
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="transition and desc_global and
+		       desc_dep_create_diff and desc_close_subtree">
+	<code><![CDATA[
+static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
+
+	struct desc_track *desc = NULL;
+	if (ret == -EINVAL) {
+		call_recover_call_nameserver(IDL_parent_spd, IDL_parent_id, COS_UPCALL_RECOVERY);
+                ret = -ELOOP;
+	} else if (ret == -ECHILD) { 
+		assert(IDL_parent_spd ==  cos_spd_id());
+		desc = call_desc_lookup(IDL_parent_id);
+		assert(desc);
+		int tmp;
+		tmp = IDL_root_fname_exist(IDL_parent_spd, IDL_parent_id);
+		if (tmp != IDL_id) assert(0);
+                ret = -ELOOP;
+	}
+
+        if (!ret) return ret;
+
+	desc = call_desc_lookup(IDL_id);
+        if (likely(!desc)) {
+	        desc = call_desc_alloc(IDL_id);
+	        assert(desc);
+ 	        call_desc_cons(desc, IDL_id, IDL_params);
+        }
+
+	IDL_curr_state;
+
+	return ret;
+}
+	]]>
+	</code>5A
       </predicate>
 
       <predicate name="terminal and (desc_dep_close_removal or desc_dep_create_none)">
@@ -712,42 +915,69 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 	</code>
       </predicate>
 
-      <predicate name="transition and not desc_global">
+      <predicate name="terminal and desc_close_subtree and desc_global and desc_dep_create_diff">
 	<code><![CDATA[
 static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
-	struct desc_track *desc = call_desc_lookup(IDL_id);
-	if (desc) { IDL_curr_state; }
+        block_cli_if_remove_desc(IDL_id);
 	return ret;
 }
 	]]>
 	</code>
       </predicate>
 
-      <predicate name="transition and desc_global">
+    </block>
+
+
+    <block name="block_cli_if_remove_desc"> <!-- <<< block_cli_if_remove_desc>>>>>-->
+      <predicate name="terminal and desc_close_subtree and desc_global and desc_dep_create_diff">
 	<code><![CDATA[
-static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
-	struct desc_track *desc = call_desc_lookup(IDL_id);
-	if (desc) { IDL_curr_state; }
+static inline void block_cli_if_remove_desc(IDLidtype IDL_id) {
+        int dest_spd;
+	struct desc_track *parent_desc = call_desc_lookup(IDL_id);
+        if (!parent_desc) goto done;
+        if (!parent_desc->is_parent) goto done;
 
-	if (ret == -EINVAL) {
-		call_desc_update(IDL_id, state_IDL_fname);
-		ret = -ELOOP;
+        struct desc_track *desc = NULL;
+	while (!EMPTY_LIST(parent_desc, next, prev)) {
+		desc = FIRST_LIST(parent_desc, next, prev);
+		assert(desc);
+		
+                // hard-code ">> 16" now for mem_mgr
+		if ((desc->d_spd_flags >> 16) != cos_spd_id()) {
+			call_recover_call_nameserver((desc->d_spd_flags >> 16), desc->IDL_id, COS_UPCALL_REMOVE_SUBTREE);
+		} else {
+                        block_cli_if_remove_desc(desc->IDL_id);
+		}
+
+		REM_LIST(desc, next, prev);
+		call_desc_dealloc(desc);
 	}
-
-	return ret;
+done:
+        return;
 }
 	]]>
 	</code>
       </predicate>
     </block>
 
+
+    <block name="block_cli_if_remove_upcall_subtree_entry"><!--<<<<<<<< block_cli_if_remove_upcall_subtree_entry >>>>>>>>>-->
+      <predicate name="desc_global and desc_close_subtree and desc_dep_create_diff">
+	<code><![CDATA[
+void IDL_service_cli_if_remove_upcall_subtree_entry(IDLidtype id) {
+	block_cli_if_remove_desc(id);
+}
+	]]>
+	</code>
+      </predicate>
+    </block>
+
+
     <block name="block_cli_if_recover_data"><!--<<<<<<<< block_cli_if_recover_data >>>>>>>>>-->
       <predicate name="resc_has_data">
 	<code><![CDATA[
-static inline void call_restore_data(struct desc_track *desc) {}
 static inline void block_cli_if_recover_data(struct desc_track *desc) {
 	assert(desc);
-	call_restore_data(desc);
 }
 	]]>
 	</code>
@@ -766,10 +996,94 @@ static inline void block_cli_if_recover_data(struct desc_track *desc) {
     <block name="block_cli_if_save_data"><!--<<<<<<<< block_cli_if_save_data >>>>>>>>>-->
       <predicate name="desc_has_data">
 	<code><![CDATA[
-static inline void call_save_data(int id, void *data) {}
+static inline void call_save_data(IDLidtype id, void *data) {}
 
-static inline void block_cli_if_save_data(int id, void *data) {
+static inline void block_cli_if_save_data(IDLidtype id, void *data) {
 	call_save_data(id, data);
+}
+	]]>
+	</code>
+      </predicate>
+    </block>
+
+    <block name="block_cli_if_upcall_creator"><!--<<<<<<<< block_cli_if_upcall_creator >>>>>>>>>-->
+      <predicate name="desc_global and desc_dep_create_same">
+	<code><![CDATA[
+static inline void block_cli_if_upcall_creator(IDLidtype id) {
+	IDL_service_upcall_creator(cos_spd_id(), id);
+}
+	]]>
+	</code>
+      </predicate>
+
+<!--       <predicate name="not desc_global or (desc_global and not desc_dep_create_same)"> -->
+<!-- 	<code><![CDATA[ -->
+<!-- static inline void block_cli_if_upcall_creator(IDLidtype id) { -->
+<!-- } -->
+<!-- 	]]> -->
+<!-- 	</code> -->
+<!--       </predicate> -->
+    </block>
+
+    <block name="block_cli_if_recover_upcall_subtree"><!--<<<<<<<< block_cli_if_recover_upcall_subtree >>>>>>>>>-->
+      <!--for example, mem_mgr-->
+      <predicate name="terminal and desc_close_subtree and desc_dep_create_diff">
+	<code><![CDATA[
+static inline void block_cli_if_recover_upcall_subtree(IDLidtype id) {
+        struct desc_track *desc        = NULL;
+        struct desc_track *desc_child  = NULL;
+
+	assert(id);
+	desc = call_desc_lookup(id);
+	if (!desc || !desc->is_parent) return;
+	
+	for (desc_child  = FIRST_LIST(desc, next, prev);
+	     desc_child != desc;
+	     desc_child  = FIRST_LIST(desc_child, next, prev)) {
+		block_cli_if_basic_id(desc_child->IDL_id);
+
+                // hard-code this
+		if ((desc_child->d_spd_flags >> 16) != cos_spd_id()) {
+			call_recover_call_nameserver((desc_child->d_spd_flags >> 16), desc_child->IDL_id, COS_UPCALL_RECOVERY_SUBTREE);
+		} else {
+			id = desc_child->IDL_id;
+			block_cli_if_recover_upcall_subtree(id);
+		}
+	}
+        return;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="terminal and desc_close_self_only">
+	<code><![CDATA[
+static inline void block_cli_if_recover_upcall_subtree(IDLidtype id) {
+}
+	]]>
+	</code>
+      </predicate>
+    </block>
+
+
+    <block name="block_cli_if_recover_upcall_subtree_entry"><!--<<<<<<<< block_cli_if_recover_upcall_subtree_entry >>>>>>>>>-->
+
+      <predicate name="desc_global and desc_close_subtree and desc_dep_create_diff">
+	<code><![CDATA[
+void IDL_service_cli_if_recover_upcall_subtree_entry(IDLidtype id) {
+	block_cli_if_recover_upcall_subtree(id);
+}
+	]]>
+	</code>
+      </predicate>
+    </block>
+
+    <block name="block_cli_if_recover_upcall"><!--<<<<<<<< block_cli_if_recover_upcall >>>>>>>>>-->
+      <predicate name="desc_global and not desc_dep_create_none">
+	<code><![CDATA[
+static inline void block_cli_if_recover_upcall(IDLidtype id) {
+	assert(id);
+	block_cli_if_recover(id);
 }
 	]]>
 	</code>
@@ -780,7 +1094,7 @@ static inline void block_cli_if_save_data(int id, void *data) {
 
       <predicate name="desc_global and not desc_dep_create_none">
 	<code><![CDATA[
-void IDL_service_cli_if_recover_upcall_entry(int id) {
+void IDL_service_cli_if_recover_upcall_entry(IDLidtype id) {
 	block_cli_if_recover_upcall(id);
 }
 	]]>
@@ -789,34 +1103,77 @@ void IDL_service_cli_if_recover_upcall_entry(int id) {
       
       <predicate name="desc_global and desc_dep_create_none">
 	<code><![CDATA[
-void IDL_service_cli_if_recover_upcall_entry(int id) {
+void IDL_service_cli_if_recover_upcall_entry(IDLidtype id) {
 }
 	]]>
 	</code>
       </predicate>
     </block>
     
-    <block name="block_cli_if_recover_upcall_extern"><!--<<<<<<<< block_cli_if_recover_upcall_extern >>>>>>>>>-->
-      <predicate name="desc_global and desc_dep_create_diff">
+    <block name="block_cli_if_recover_call_nameserver"><!--<<<<<<<< block_cli_if_recover_call_nameserver >>>>>>>>>-->
+      <!--for example, evt and mmgr must have a name server-->
+      <predicate name="desc_global and not create_new_id">
 	<code><![CDATA[
-extern void call_recover_upcall(int dest_spd, int id);
-	]]>
-	</code>
-      </predicate>
-    </block>
-
-    <block name="block_cli_if_desc_cons"><!--<<<<<<<< block_cli_if_desc_cons >>>>>>>>>-->
-      <predicate name="desc_global and desc_dep_create_none">
-	<code><![CDATA[
-static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl) {
+static inline void call_recover_call_nameserver(int dest_spd, IDLidtype id, int type) {
+        IDL_nameserver_recover_call(dest_spd, id, type);
 }
 	]]>
 	</code>
       </predicate>
 
-      <predicate name="not (desc_global and desc_dep_create_none)">
+    </block>
+
+    <block name="block_cli_if_desc_cons"><!--<<<<<<<< block_cli_if_desc_cons >>>>>>>>>-->
+      <!--for example, scheduler-->
+      <predicate name="desc_global and desc_dep_create_none">
 	<code><![CDATA[
-static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl) {
+static inline void call_desc_cons(struct desc_track *desc, IDLidtype id, IDL_parsdecl) {
+}
+	]]>
+	</code>
+      </predicate>
+
+      <!--for example, mem_mgr-->
+      <predicate name="desc_global and desc_dep_create_diff and desc_close_subtree">
+	<code><![CDATA[
+static inline void call_desc_cons(struct desc_track *desc, IDLidtype id, IDL_parsdecl) {
+
+        struct desc_track *parent_desc = NULL;
+	assert(desc);
+
+	IDL_desc_cons;
+
+	desc->fault_cnt = global_fault_cnt;
+
+        /* for close subtree */
+	desc->is_parent = 0;
+    
+        INIT_LIST(desc, next, prev);  
+
+        parent_desc = call_desc_lookup(IDL_parent_id);
+        if (!parent_desc) {
+            parent_desc = call_desc_alloc(IDL_parent_id);
+            assert(parent_desc);
+            INIT_LIST(parent_desc, next, prev);
+
+            IDL_parent_desc_cons;
+            parent_desc->fault_cnt = global_fault_cnt;
+        }
+
+        parent_desc->is_parent = 1;
+        ADD_LIST(parent_desc, desc, next, prev);
+
+	return;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <!--for example, evt and other service-->
+      <predicate name="(not desc_global or (desc_global and
+		       desc_dep_create_same)) and create_new_id">
+	<code><![CDATA[
+static inline void call_desc_cons(struct desc_track *desc, IDLidtype id, IDL_parsdecl) {
 	assert(desc);
 
 	desc->IDL_server_id = id;
@@ -830,6 +1187,23 @@ static inline void call_desc_cons(struct desc_track *desc, int id, IDL_parsdecl)
 	]]>
 	</code>
       </predicate>
+
+      <predicate name="(not desc_global or (desc_global and
+		       desc_dep_create_same)) and not create_new_id">
+	<code><![CDATA[
+static inline void call_desc_cons(struct desc_track *desc, IDLidtype id, IDL_parsdecl) {
+	assert(desc);
+
+	IDL_desc_cons;
+
+	desc->fault_cnt = global_fault_cnt;
+
+	return;
+}
+	]]>
+	</code>
+      </predicate>
+
     </block>
 
     <block name="block_cli_if_state_transition"><!--<<<<<<<< block_cli_if_state_transition >>>>>>>>>-->
@@ -854,7 +1228,40 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	call_map_init();
 
 redo:
-	block_cli_if_desc_update_IDL_fname(IDL_idIDL_parent_id);
+	block_cli_if_desc_update_IDL_fname(IDL_id, IDL_parent_id);
+
+	IDL_benchmark_end
+
+	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc); 
+        if (unlikely (fault)){
+
+		IDL_benchmark_start
+
+		CSTUB_FAULT_UPDATE();
+		if (block_cli_if_desc_update_post_fault_IDL_fname()) {
+			goto redo;
+		}
+        }
+	ret = block_cli_if_track_IDL_fname(ret, IDL_params);
+
+	if (unlikely(ret == -ELOOP)) goto redo;
+
+        return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="not server_wakeup and not server_block and not create_new_id">
+	<code><![CDATA[
+CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
+	long fault = 0;
+	int ret = 0;
+	
+	call_map_init();
+
+redo:
+	block_cli_if_desc_update_IDL_fname(cos_get_thd_id());
 
 	IDL_benchmark_end
 
@@ -923,7 +1330,7 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	int sz  = IDL_data_len + sizeof(struct __ser_IDL_fname_marshalling);
 
 redo:
-	block_cli_if_desc_update_IDL_fname(IDL_idIDL_parent_id);
+	block_cli_if_desc_update_IDL_fname(IDL_id, IDL_parent_id);
 
         md = (struct __ser_IDL_fname_marshalling *)cbuf_alloc(sz, &cb);
 	assert(md);  // assume we always get cbuf for now
@@ -969,7 +1376,7 @@ redo:
       <predicate name="desc_block">
 	<code><![CDATA[
 struct track_block {
-	int IDL_id;
+	IDLidtype IDL_id;
 	struct track_block *next, *prev;
 };
 struct track_block tracking_block_list[MAX_NUM_SPDS]; 
@@ -1053,7 +1460,7 @@ void __ser_IDL_service_client_fault_notification(int IDL_from_spd) {
     </block>
 
     <block name="block_ser_if_receate_exist"><!--<<<<<<<< block_ser_if_receate_exist >>>>>>>>>-->
-      <predicate name="creation and desc_global">
+      <predicate name="creation and desc_global and desc_dep_create_same">
 	<code><![CDATA[
 IDL_fntype __ser_IDL_fname_exist(IDL_parsdecl, int existing_id) {
 	IDL_fntype ret = 0;
@@ -1063,15 +1470,27 @@ IDL_fntype __ser_IDL_fname_exist(IDL_parsdecl, int existing_id) {
 	]]>
 	</code>
       </predicate>
+
+      <predicate name="creation and desc_global and desc_dep_create_diff">
+	<code><![CDATA[
+IDL_fntype __ser_IDL_fname_exist(IDL_parsdecl) {
+	IDL_fntype ret = 0;
+	ret = IDL_fname_exist(IDL_params, existing_id);
+	return ret;
+}
+	]]>
+	</code>
+      </predicate>
+
     </block>
 
     <block name="block_ser_if_upcall_creator"><!--<<<<<<<< block_ser_if_upcall_creator >>>>>>>>>-->
-      <predicate name="desc_global">
+      <predicate name="desc_global and create_new_id and (not desc_dep_create_none)">
 	<code><![CDATA[
-extern int ns_upcall(spdid_t spdid, int id);
-int __ser_IDL_service_upcall_creator(spdid_t spdid, int id) {
+extern int call_recover_call_nameserver(spdid_t spdid, int IDLidtype, int type);
+int __ser_IDL_service_upcall_creator(spdid_t spdid, IDLidtype id) {
 	int ret = 0;
-	ns_upcall(spdid, id);
+	call_recover_call_nameserver(spdid, id, 0);
 	return ret;
 }
 	]]>

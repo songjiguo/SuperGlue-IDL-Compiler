@@ -73,7 +73,12 @@ def parse_decl_info(node):
         ret = parse_idl_str('SM', node.name)
       
     if (ret[0] == "creation"):
-        result.tuple[-1].sm_info[ret[0]] = [("null", ret[1])]
+        if (creation_list): # for example, there are 2 mapping creations functoin for mem_mgr 
+            creation_list.append((creation_list[-1][-1], ret[1])) 
+        else:
+            creation_list.append(("null", ret[1]))
+        #result.tuple[-1].sm_info[ret[0]] = [("null", ret[1])]
+        result.tuple[-1].sm_info[ret[0]] = creation_list
     elif (ret[0] == "terminal"):
         result.tuple[-1].sm_info[ret[0]] = [(ret[1], "end")]
     elif (ret[0] == "block"):
@@ -83,7 +88,6 @@ def parse_decl_info(node):
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
-
 #===============================================================================
 # # Struct: [name, decls**]
 # # struct is node.decls  --> decl list (node is Struct)
@@ -154,6 +158,7 @@ def construct_desc_fields(fname, field_str):
     # construct tracking descriptor struture
     desc_str        = "desc_data"
     pdesc_str       = "parent_desc"
+    pdesc_spd_str   = "parent_desc_component"
     desc_add_str    = "desc_data_add"
     desc_sizeof     = "size_of"
     desc_retval     = "desc_data_retval"
@@ -162,9 +167,13 @@ def construct_desc_fields(fname, field_str):
         idx = field_str.index(pdesc_str)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
         result.gvars["parent id"] =  [field_str[idx+1],field_str[idx+2]]
+    elif (desc_str in field_str and pdesc_spd_str in field_str):
+        idx = field_str.index(pdesc_spd_str)
+        result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
+        result.gvars["parent component"] =  [field_str[idx+1],field_str[idx+2]]
     elif (desc_str in field_str and desc_sizeof in field_str):
         idx = field_str.index(desc_sizeof)
-        result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])         
+        result.tuple[-1].desc_data_fields.append([field_str[idx+2],field_str[idx+3]])
     elif (desc_str in field_str):
         idx = field_str.index(desc_str)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])            
@@ -175,7 +184,7 @@ def construct_desc_fields(fname, field_str):
         idx = field_str.index(desc_retval)
         result.tuple[-1].desc_data_fields.append([field_str[idx+1],field_str[idx+2]])
         result.gvars["id"] =  [field_str[idx+1],field_str[idx+2]]
-
+        
 # # Decl: [name, quals, storage, funcspec, type*, init*, bitsize*]
 # # node is a Decl
 def parse_parameters(node):
@@ -283,8 +292,10 @@ def parse_global_info(ast):
     v.visit(ast)     
     
 def parse_state_machine(ast):
-    global transition_list
+    global transition_list, creation_list, terminal_list
     transition_list = []
+    creation_list   = []
+    terminal_list   = []
     v = DeclVisitor()
     v.visit(ast) 
     
@@ -292,9 +303,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_mm.h'
+        filename = 'input/cidl_periodic_wake.h'
     
-    keywords.init_service_name(filename)    
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
         keywords.plot_sm_graph()
 
@@ -321,33 +331,36 @@ if __name__ == "__main__":
     parse_state_machine(ast)
     parse_func_decl(ast)
     
+    # this is the special case that the calling thread is being trakced and
+    # still need track the return value
+    # for periodic_wake, we also hard_code in c3_gen for create_new_id
+    if ("id" not in result.gvars):
+        result.tuple[-1].desc_data_fields.append(["int","thdid"])
+        result.gvars["id"] = ["int","thdid"]
+    
     #===========================================================================
     # pprint (result.tuple[0].info)
-    # pprint (result.tuple[0].sm_info)
-    # pprint (result.tuple[0].ser_block_track)
-    # pprint (result.tuple[0].desc_data_fields)
-    # pprint (result.gvars)
+    #pprint (result.tuple[0].sm_info)
+    #pprint (result.tuple[0].ser_block_track)
+    #pprint (result.tuple[0].desc_data_fields)
+    #pprint (result.gvars)
+    # print("")
+    # pprint (result.tuple[0].functions[0].info)
+    # print("")
+    # pprint (result.tuple[0].functions[1].info)
+    # print("")
+    # pprint (result.tuple[0].functions[2].info)
+    # print("")
+    # pprint (result.tuple[0].functions[3].info)
+    # print("")
+    # pprint (result.tuple[0].functions[4].info)
+    # print("")
+    # pprint (result.tuple[0].functions[5].info)
+    # print("")
+    # pprint (result.tuple[0].functions[6].info)
+    # print("")
     #===========================================================================
- 
-#===============================================================================
-#     print("")
-#     pprint (result.tuple[0].functions[0].info)
-#     print("")
-#     pprint (result.tuple[0].functions[1].info)
-#     print("")
-#     pprint (result.tuple[0].functions[2].info)
-#     print("")
-#     pprint (result.tuple[0].functions[3].info)
-#     print("")
-#     pprint (result.tuple[0].functions[4].info)
-#     print("")
-#     pprint (result.tuple[0].functions[5].info)
-#     print("")
-#     pprint (result.tuple[0].functions[6].info)
-#     print("")
-# 
-#     exit()
-#===============================================================================
+    #exit()
       
     c3_gen.idl_generate(result, ast)
     

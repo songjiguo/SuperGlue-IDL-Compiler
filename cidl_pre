@@ -1,7 +1,7 @@
-# 1 "input/cidl_mm.h"
+# 1 "input/cidl_periodic_wake.h"
 # 1 "<built-in>"
 # 1 "<command-line>"
-# 1 "input/cidl_mm.h"
+# 1 "input/cidl_periodic_wake.h"
 
 
 
@@ -61,41 +61,33 @@ typedef unsigned long ul_t;
 typedef unsigned long long ull_t;
 
 struct usr_inv_cap {int a;};
-# 5 "input/cidl_mm.h" 2
+# 5 "input/cidl_periodic_wake.h" 2
 
 struct global_info sgi = {
- .service_name = mem_mgr,
+ .service_name = periodic_wake,
 
-        .desc_close_subtree = true,
-        .desc_dep_create_diff = true,
-        .desc_dep_close_removal = true,
-        .desc_global = true,
-        .desc_block = false,
+        .desc_close_self_only = true,
+        .desc_dep_create_none = true,
+        .desc_global = false,
+        .desc_block = true,
         .desc_has_data = true,
-        .resc_has_data = true,
+        .resc_has_data = false,
 };
 
-void SM_creation_SM___mman_alias_page;
-void SM_transition_SM___mman_alias_page_SM___mman_alias_page;
-void SM_terminal_SM_mman_revoke_page;
-
-vaddr_t
-mman_get_page(spdid_t CD_desc_data_CD_spd,
-       vaddr_t CD_desc_data_CD_addr,
-       int CD_desc_data_CD_flags);
+void SM_creation_SM_periodic_wake_create;
+void SM_transition_SM_periodic_wake_create_SM_periodic_wake_wait;
+void SM_transition_SM_periodic_wake_wait_SM_periodic_wake_wait;
+void SM_transition_SM_periodic_wake_wait_SM_periodic_wake_remove;
+void SM_transition_SM_periodic_wake_create_SM_periodic_wake_remove;
+void SM_terminal_SM_periodic_wake_remove;
 
 int
-mman_release_page(spdid_t spd,
-    vaddr_t CD_desc_lookup_CD_addr,
-    int flags);
+periodic_wake_create(spdid_t CD_desc_data_CD_spdid,
+       unsigned int CD_desc_data_CD_period);
 
 int
-mman_revoke_page(spdid_t spd,
-   vaddr_t CD_desc_lookup_CD_addr,
-   int flags);
+periodic_wake_wait(spdid_t spdid);
 
-typedef vaddr_t CD_desc_data_retval_CD_vaddr_t_CD_d_addr; CD_desc_data_retval_CD_vaddr_t_CD_d_addr
-__mman_alias_page(spdid_t spd,
-    vaddr_t CD_desc_lookup_CD_parent_desc_CD_addr,
-    u32_t CD_desc_data_CD_d_spd_flags,
-    vaddr_t CD_desc_data_CD_d_addr);
+int
+periodic_wake_remove(spdid_t spdid,
+       unsigned short int CD_desc_lookup_CD_thdid);
