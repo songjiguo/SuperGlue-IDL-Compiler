@@ -67,10 +67,12 @@ int hahalock = 10;
 #define cslab_alloc_rdservice() 0
 
 #define CSTUB_INVOKE
+#define CSTUB_INVOKE_NULL
 #define CSTUB_INVOKE_3RETS
 #define CSTUB_FAULT_UPDATE()
 
 #define MAX_NUM_SPDS 64
+#define MAX_NUM_THREADS 32
 
 #define STATIC_INIT_LIST(obj, next, prev)         \
 	obj = {                                   \
@@ -124,6 +126,12 @@ int lock_component_release(){}
 
 int sched_component_take(){}
 int sched_component_release(){}
+int cos_sched_lock_take() {}
+int cos_sched_lock_release() {}
+int sched_block(){}
+int sched_wakeup(){}
+int sched_timestamp(){}
+int sched_restore_ticks(){}
 
 int evt_upcall_creator(){}
 int evt_split(){}

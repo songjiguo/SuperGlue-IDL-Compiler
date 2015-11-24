@@ -233,10 +233,14 @@ def parse_func(node):
         fun_info[fun.sm_state]  = "transition"
     
     #pprint(fun_info)
+    #print()
     #print (node.type.declname)
+    #print (node.args.params)
+    #print (node.args.params[0].name)
     #print (type(node.args).__name__)
     #### parameters of a function #####   KEVIN ANDY
-    if (type(node.args).__name__ != "NoneType"):  # some functions do not have parameters
+    # some functions do not have parameters
+    if (type(node.args).__name__ != "NoneType" and node.args.params[0].name): # last one for void params
         for param_decl in node.args.params:
             func_params = parse_parameters(param_decl)
             #print (param_decl)
@@ -261,17 +265,18 @@ def parse_func(node):
           
     #### return of a function ####        
     func_return = parse_idl_str('CD', str(get_dec_type_name(node)[0]))
-    
+
     if (not func_return[0]):   # normal return
-        #print(node.type.type.names[0])
-        #func_return[0] = node.type.type.names[0]
-        fun_info[fun.type] = node.type.type.names[0]  # add type
+        #print(" ".join(node.type.type.names))
+        func_return[0] = node.type.type.names[0]
+        #fun_info[fun.type] = node.type.type.names[0]  # add type
+        fun_info[fun.type] = " ".join(node.type.type.names)  # add type
     else:   # if there is "CD"
         fun_info[fun.type] = func_return[1]           # add type
         #print(func_return[0])
         #print (func_return[1])
         fun_info[func_return[0]] = func_return[1:]   # add into dict -- key, val
-                
+              
     construct_desc_fields(fun_info[fun.name], func_return)   # construct desc tracking fields
         
     #print (result.tuple[-1].functions[-1].normal_para)
@@ -303,7 +308,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     else:
-        filename = 'input/cidl_periodic_wake.h'
+        filename = 'input/cidl_ramfs.h'
     
     if (len(sys.argv) == 3 and sys.argv[2] == "graph"):
         keywords.plot_sm_graph()
@@ -339,26 +344,26 @@ if __name__ == "__main__":
         result.gvars["id"] = ["int","thdid"]
     
     #===========================================================================
-    # pprint (result.tuple[0].info)
+    #pprint (result.tuple[0].info)
     #pprint (result.tuple[0].sm_info)
     #pprint (result.tuple[0].ser_block_track)
     #pprint (result.tuple[0].desc_data_fields)
     #pprint (result.gvars)
-    # print("")
-    # pprint (result.tuple[0].functions[0].info)
-    # print("")
-    # pprint (result.tuple[0].functions[1].info)
-    # print("")
-    # pprint (result.tuple[0].functions[2].info)
-    # print("")
-    # pprint (result.tuple[0].functions[3].info)
-    # print("")
-    # pprint (result.tuple[0].functions[4].info)
-    # print("")
-    # pprint (result.tuple[0].functions[5].info)
-    # print("")
-    # pprint (result.tuple[0].functions[6].info)
-    # print("")
+    #print("")
+    #pprint (result.tuple[0].functions[0].info)
+    #print("")
+    #pprint (result.tuple[0].functions[1].info)
+    #print("")
+    #pprint (result.tuple[0].functions[2].info)
+    #print("")
+    #pprint (result.tuple[0].functions[3].info)
+    #print("")
+    #pprint (result.tuple[0].functions[4].info)
+    #print("")
+    #pprint (result.tuple[0].functions[5].info)
+    #print("")
+    #pprint (result.tuple[0].functions[6].info)
+    #print("")
     #===========================================================================
     #exit()
       

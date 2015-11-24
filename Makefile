@@ -18,7 +18,7 @@ SCHED_SERVICE=sched
 ## everything
 ##############
 
-all: parse_all compile_all gen_all cp_all
+all: parse_all compile_all gen_all cp_all plot_all
 
 all_ramfs: parse_ramfs compile_ramfs gen_ramfs cp_ramfs plot_ramfs
 
@@ -34,24 +34,27 @@ all_periodic_wake: parse_periodic_wake compile_periodic_wake gen_periodic_wake c
 
 
 # everything with the benchmark
-all_bench: parse_all compile_all gen_all_bench cp_all
+all_bench: parse_all compile_all bench_all cp_all
 
-all_ramfs_bench: parse_ramfs compile_ramfs gen_ramfs_bench cp_ramfs plot_ramfs
+all_ramfs_bench: parse_ramfs compile_ramfs bench_ramfs cp_ramfs
 
-all_lock_bench: parse_lock compile_lock gen_lock_bench cp_lock plot_lock
+all_lock_bench: parse_lock compile_lock bench_lock cp_lock
 
-all_evt_bench: parse_evt compile_evt gen_evt_bench cp_evt plot_evt
+all_evt_bench: parse_evt compile_evt bench_evt cp_evt
 
-all_sched_bench: parse_sched compile_sched gen_sched_bench cp_sched plot_sched
+all_sched_bench: parse_sched compile_sched bench_sched cp_sched
 
-all_mem_mgr_bench: parse_mem_mgr compile_mem_mgr gen_mem_mgr_bench cp_mem_mgr plot_mem_mgr
+all_mem_mgr_bench: parse_mem_mgr compile_mem_mgr bench_mem_mgr cp_mem_mgr
 
-all_periodic_wake_bench: parse_periodic_wake compile_periodic_wake gen_periodic_wake_bench cp_periodic_wake plot_periodic_wake
+all_periodic_wake_bench: parse_periodic_wake compile_periodic_wake bench_periodic_wake cp_periodic_wake
+
+# for quick testing
+test_all: parse_all compile_all
 
 ##############
 ## parsing
 ##############
-parse_all: parse_ramfs parse_lock parse_evt parse_mem_mgr parse_periodic_wake
+parse_all: parse_ramfs parse_lock parse_evt parse_sched parse_mem_mgr parse_periodic_wake
 	@echo
 
 parse_ramfs:
@@ -135,35 +138,35 @@ compile_periodic_wake:
 ########################################################
 ## generate the acutal interface code w/ ubenchmark
 ########################################################
-gen_all_bench: gen_ramfs_bench gen_lock_bench gen_evt_bench gen_sched_bench gen_mem_mgr_bench gen_periodic_wake_bench
+bench_all: bench_ramfs bench_lock bench_evt bench_sched bench_mem_mgr bench_periodic_wake
 	@echo
 
-gen_ramfs_bench:
+bench_ramfs:
 	@echo $(FINAL_CODE)
 	@echo "IDL process starting.... <<<"$(FS_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(FS_SERVICE).h bench
 
-gen_lock_bench:
+bench_lock:
 	@echo
 	@echo "IDL process starting.... <<<"$(LOCK_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(LOCK_SERVICE).h bench
 
-gen_evt_bench:
+bench_evt:
 	@echo
 	@echo "IDL process starting.... <<<"$(EVT_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(EVT_SERVICE).h bench
 
-gen_sched_bench:
+bench_sched:
 	@echo
 	@echo "IDL process starting.... <<<"$(SCHED_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(SCHED_SERVICE).h bench
 
-gen_mem_mgr_bench:
+bench_mem_mgr:
 	@echo
 	@echo "IDL process starting.... <<<"$(MM_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(MM_SERVICE).h bench
 
-gen_periodic_wake_bench:
+bench_periodic_wake:
 	@echo
 	@echo "IDL process starting.... <<<"$(PTE_SERVICE)">>>"
 	$(PYTHON) $(PARSER) input/cidl_$(PTE_SERVICE).h bench

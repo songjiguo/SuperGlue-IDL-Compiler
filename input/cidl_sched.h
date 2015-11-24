@@ -9,7 +9,7 @@ service_global_info = {
         desc_close_self_only = true,
         desc_dep_create_none = true,
         desc_global	     = true,
-        desc_block	     = false,
+        desc_block	     = true,
         desc_has_data	     = false,
         resc_has_data	     = true,
 };
@@ -18,6 +18,10 @@ sm_creation(sched_create_thd);
 sm_transition(sched_create_thd, sched_block);
 sm_transition(sched_block, sched_wakeup);
 sm_transition(sched_wakeup, sched_block);
+
+sm_transition(sched_create_thd, sched_component_take);
+sm_transition(sched_component_take, sched_component_release);
+sm_transition(sched_component_release, sched_component_take);
 
 sm_block(sched_block);
 sm_wakeup(sched_wakeup);
@@ -46,7 +50,7 @@ int
 sched_timeout(spdid_t spdid, 
 	      unsigned long amnt);
 
-/* unsigned long */
-/* sched_timestamp(); */
+unsigned long
+sched_timestamp(void);
 
 #endif /* _COS_IDL_SCHED_H */

@@ -154,7 +154,7 @@ server_block           = False
 server_wakeup          = False
 
 # invisible to the programmer
-non_function           = True  # alwasy appear
+always_appear          = True  # alwasy appear
 marshalling            = False # no marshalling by default
 create_new_id          = True  # majority create APIs return new id, except mem_get_page and pte
 #===============================================================================
@@ -267,10 +267,22 @@ def traverse(o, tree_types=(list, tuple)):
 def replace_params(result, fdesc, code, IFcode, subIFcode, param_list, paramdecl_list):
     name    = fdesc[0]
 
-    code = code.replace("IDL_params", ', '.join(param_list))
-    code = code.replace("IDL_pars_len", str(len(param_list)))
-    code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
-    code = code.replace("IDL_fname", name)
+    if (param_list):
+        code = code.replace("IDL_params", ', '.join(param_list))
+        code = code.replace("IDL_pars_len", str(len(param_list)))
+        code = code.replace("IDL_parsdecl", ', '.join(paramdecl_list))
+        code = code.replace("IDL_fname", name)
+    else: # these are for the function with void parameter list
+        code = code.replace("IDL_params,", '')
+        code = code.replace(", IDL_params", '')
+        code = code.replace("IDL_params", '')
+        code = code.replace(", IDL_pars_len", '')
+        code = code.replace("IDL_pars_len,", '')
+        code = code.replace("IDL_pars_len", '')
+        code = code.replace(", IDL_parsdecl", '')
+        code = code.replace("IDL_parsdecl,", '')
+        code = code.replace("IDL_parsdecl", '')
+        code = code.replace("IDL_fname", name)
     
     if (fdesc[2] != "creation"):
         server_id_param = subIFcode["parameters"]["params"]
@@ -292,6 +304,7 @@ def generate_globalvas(result, IFcode):
         keywords.get_lock_function(IFcode, keywords.service_name)
 
     global final_id, final_parent_id, final_parent_component, final_id_type, final_parent_id_type
+    global create_new_id
 
     # set up the tracking strcuture
     IFcode["trackds"] = {"code":  IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STRUCT"]}
@@ -306,13 +319,14 @@ def generate_globalvas(result, IFcode):
     # transparent to the user
     tmp = tmp + "    " + desc_track_state + ";\n"  
     tmp = tmp + "    " + desc_track_next_state + ";\n"  
-    tmp = tmp + "    " + desc_track_fault_cnt + ";"
+    tmp = tmp + "    " + desc_track_fault_cnt + ";"    
     
     if (desc_close_subtree):
         tmp = tmp + "    " + "\n\n"  
         tmp = tmp + "    "  + desc_track_subtree_parent + ";\n"  
         tmp = tmp + "    " + "struct IDL_desc_track *next, *prev" + ";\n"
-    elif (desc_global):
+        
+    if (not desc_global and create_new_id):
         tmp = tmp + "    " + desc_track_server_id + ";\n"
 
     tmp = tmp + "\n};\n"  
@@ -406,8 +420,7 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
     #print(keywords.service_name)
     # for now. we do not recover other system services that depend on ramfs and timed_evt
     # so basically there services are the top level service and no need to track/block
-    if (keywords.service_name == "periodic_wake" or keywords.service_name == "sched"): return
-    
+    if (keywords.service_name == "periodic_wake" or keywords.service_name == "ramfs"): return
     if (ser_funcblocks):
         for serblk in ser_funcblocks:
             #print(serblk.show())
@@ -476,6 +489,27 @@ def bench_mark(code, fname):
     code = code.replace("IDL_fname", fname)
 
     return code
+
+def sched_timer_tick_track(subIFcode, fdesc):
+
+    code = subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"]
+    if (fdesc[0] == "sched_timestamp"):
+        code = code.replace("IDL_timestamp_track", keywords.sched_timestamp_track_str)
+    else:
+        code = code.replace("IDL_timestamp_track","")    
+    subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"] = code
+    
+    code = subIFcode["blocks"]["BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT"]
+    if (fdesc[0] == "sched_timeout"):
+        code = code.replace("IDL_restore_ticks", "sched_restore_ticks(last_system_ticks);")
+    else:
+        code = code.replace("IDL_restore_ticks","")    
+    subIFcode["blocks"]["BLOCK_CLI_IF_DESC_UPDATE_POST_FAULT"] = code
+
+    code = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
+    if (fdesc[0] == "sched_timestamp"):
+        code = code.replace("CSTUB_INVOKE", "CSTUB_INVOKE_NULL")
+    subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = code
 
 # marshall the parameter list (using cbuf), if 2 conditions are met
 # 1) more than 4 parameters (Composite passes up to 4 parameters)
@@ -604,6 +638,11 @@ def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblo
     code = subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"]
     code = code.replace("IDL_root_fname", root_function)
     subIFcode["blocks"]["BLOCK_CLI_IF_TRACK"] = code    
+    
+    # hard code for tracking tsystem ticks (e.g., sched_timestamp)
+    sched_timer_tick_track(subIFcode, fdesc)  
+    
+    #result_code = result_code.replace()
 
     #print(subIFcode["cstub_fn"])
     code = subIFcode["cstub_fn"]
@@ -855,9 +894,9 @@ def generate_sm_transition(result, funcblocks, IFcode):
             if (func.info[func.name] == "trmeta" or
                 func.info[func.name] == "twmeta" or
                 func.info[func.name] == "sched_timeout" or
-                func.info[func.name] == "sched_timestamp" or
-                func.info[func.name] == "sched_component_take" or
-                func.info[func.name] == "sched_component_release"):
+                #func.info[func.name] == "sched_component_take" or
+                #func.info[func.name] == "sched_component_release" or
+                func.info[func.name] == "sched_timestamp"):
                 continue
             
             if (func.info[func.sm_state] == "creation"):
@@ -870,7 +909,6 @@ def generate_sm_transition(result, funcblocks, IFcode):
                 fn_list.append(func.info[func.name])
                 state_list.append("state_"+func.info[func.name])
         state_list.append("state_null")
-        
         
         for k, v in tup.sm_info.items():
             for item in v:
@@ -935,7 +973,7 @@ def recover_sm_transition(state_list, smg, IFcode):
     
     transition_code = IFcode["global_non_function"]["BLOCK_CLI_IF_STATE_TRANSITION"]
     #creation_v = smg.vs.find(name = state_list[0])   # creation node
-    creation_v = smg.vs.find(name = "state_"+creation_function)
+    creation_v = smg.vs.find(name = "state_" + creation_function)
     
 #===============================================================================
 #     print(state_list)
@@ -1151,11 +1189,17 @@ def construct_server_code(result, IFcode):
     if (keywords.final_output == True 
         and "lock_take_func" in IFcode 
         and "lock_take" in IFcode["lock_take_func"]):
-        lock_header = '''
-        #include <cos_synchronization.h>
-        extern IDL_lock_name
-        
-        '''
+        if (keywords.service_name != "sched"):
+            lock_header = '''
+            #include <cos_synchronization.h>
+            extern IDL_lock_name
+            
+            '''
+        else:
+            lock_header = '''
+            #include <../../../implementation/sched/cos_sched_sync.h>
+            '''
+            
         server_code =  lock_header + server_code
         server_code = server_code.replace("IDL_lock_name", IFcode["lock_name"])
         
@@ -1174,8 +1218,10 @@ def construct_server_code(result, IFcode):
     # replace the type of desc id
     server_code = server_code.replace("IDLidtype", final_id_type)
     server_code = server_code.replace("IDLparentidtype", final_parent_id_type)
-    #print(server_code)
-    #exit()
+    
+    # this is for simplicity now -- should generate the interface code for save/restore data
+    if (keywords.service_name == "sched"):
+        server_code = server_code + keywords.sched_timestamp_str
     return server_code
 
 def construct_client_code(result, IFcode):
@@ -1238,9 +1284,9 @@ def construct_client_code(result, IFcode):
             if (_k == "BLOCK_CLI_IF_TRACK"):
                 if (keywords.service_name == "sched"): # scheduler is special
                     _v = _v.replace("IDL_id", "cos_get_thd_id()")
-                    _v = _v.replace("state_sched_timeout", "0")
-                    _v = _v.replace("state_sched_component_release", "0")
-                    _v = _v.replace("state_sched_component_take", "0")
+                    #_v = _v.replace("state_sched_timeout", "0")
+                    #_v = _v.replace("state_sched_component_release", "0")
+                    #_v = _v.replace("state_sched_component_take", "0")
                     _v = _v.replace("desc->cos_get_thd_id()", "desc->IDL_id")                    
             if (_k == "BLOCK_CLI_IF_CSTUB"): # cstub_fn is not normal function (e.g., marshal) - use "cstub_fn" 
                 continue
@@ -1252,10 +1298,11 @@ def construct_client_code(result, IFcode):
     # finally replace IDL_id, IDL_server_id, IDL_parent_id
     result_code = result_code.replace("IDL_id", final_id)
     result_code = result_code.replace("IDL_server_id", "server_" + final_id)
+    
     if ("desc_parent id" in IFcode["trackds"]):
         result_code = result_code.replace("IDL_parent_id", final_parent_id)
     if ("desc_parent component" in IFcode["trackds"]):
-        result_code = result_code.replace("IDL_parent_spd", final_parent_id)
+        result_code = result_code.replace("IDL_parent_spd", final_parent_component)
 
     if (keywords.final_output == True):
         result_code = result_code.replace("IDL_init_maps", keywords.init_map_str)
@@ -1272,11 +1319,13 @@ def construct_client_code(result, IFcode):
     if (marshalling_flag == True):
         result_code = keywords.para_save_str + result_code
     
-    # replace the type of desc id
-    
+    # replace the type of desc id    
     result_code = result_code.replace("IDLidtype", final_id_type)
     result_code = result_code.replace("IDLparentidtype", final_parent_id_type)
-
+    
+    # hard code sched timeout and timestamp
+    result_code = result_code.replace("state_sched_timestamp", "0")
+    result_code = result_code.replace("state_sched_timeout", "0")
     #exit()
     return result_code
 
@@ -1299,13 +1348,22 @@ def construct_s_stub_code(result, IFcode):
         result_code = result_code + "\ncos_asm_server_stub_spdid(" + item.info["funcname"] + ")"
         
     # here we hard code the other non IDL entries (for Composite compiling purpose)
+    if (keywords.service_name == "ramfs"):
+        result_code = result_code + keywords.ramfs_norm_stub_S_str
+    if (keywords.service_name == "lock"):
+        result_code = result_code + keywords.lock_norm_stub_S_str
     if (keywords.service_name == "evt"):
         result_code = result_code + keywords.evt_norm_stub_S_str
     if (keywords.service_name == "mem_mgr"):
         result_code = result_code + keywords.mm_norm_stub_S_str
-    
+    if (keywords.service_name == "sched"):
+        result_code = result_code + keywords.sched_norm_stub_S_str
+    if (keywords.service_name == "periodic_wake"):
+        result_code = result_code + keywords.periodic_wake_norm_stub_S_str
+
+    # for example, mem_mgr does not have mman_upcall_creater
     if ("BLOCK_CLI_IF_UPCALL_CREATOR" in IFcode["global"]):
-        if (not desc_close_subtree):  # for example, mem_mgr does not have mman_upcall_creater
+        if (keywords.service_name == "evt"):
             result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name\
                                     +"_upcall_creator)" 
     #print(result_code)
