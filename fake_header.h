@@ -163,4 +163,29 @@ int cbuf2buf(){}
 #define COS_UPCALL_REMOVE_SUBTREE 0
 #define cos_get_thd_id() 0
 
+typedef int td_t;
+typedef int cbuf_t;
+typedef int spdid_t;
+typedef int tor_flags_t;
+typedef int evt_t;
+typedef int vaddr_t;
+
+typedef unsigned char      u8_t;
+typedef unsigned short int u16_t;
+typedef unsigned int       u32_t;
+typedef unsigned long long u64_t;
+typedef unsigned long      ul_t;
+typedef signed char      s8_t;
+typedef signed short int s16_t;
+typedef signed int       s32_t;
+typedef signed long long s64_t;
+
+struct usr_inv_cap {int a;};
+
+// this is only for AST paser, remove later!!!!!
+#define CVECT_CREATE_STATIC(x) 
+#define COS_MAP_CREATE_STATIC(x) 
+#define CSLAB_CREATE(x, y)
+#define CSTUB_FN(x, y) x y##a
+
 #endif /* _cos_fake_header_h */

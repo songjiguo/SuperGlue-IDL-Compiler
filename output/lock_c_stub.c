@@ -1,4 +1,4 @@
-#include "cidl_gen.h"
+#include "fake_header.h"
 
 struct desc_track {
 	spdid_t spdid;
@@ -12,7 +12,6 @@ struct desc_track {
 };
 
 static volatile unsigned long global_fault_cnt = 0;
-static volatile unsigned long last_system_ticks = 0;
 static int first_map_init = 0;
 
 COS_MAP_CREATE_STATIC(lock_desc_maps);
@@ -226,12 +225,11 @@ static inline void block_cli_if_desc_update_lock_component_pretake(spdid_t
 								   ul_t lock_id,
 								   u32_t thd_id)
 {
-	call_desc_update(cos_get_thd_id(), state_lock_component_pretake);
+	call_desc_update(lock_id, state_lock_component_pretake);
 }
 
 static inline int block_cli_if_desc_update_post_fault_lock_component_pretake()
 {
-
 	return 1;
 }
 
@@ -270,7 +268,7 @@ static inline void block_cli_if_desc_update_lock_component_release(spdid_t
 								   spdid,
 								   ul_t lock_id)
 {
-	call_desc_update(cos_get_thd_id(), state_lock_component_release);
+	call_desc_update(lock_id, state_lock_component_release);
 }
 
 static inline int block_cli_if_desc_update_post_fault_lock_component_release()
@@ -314,12 +312,11 @@ static inline void block_cli_if_desc_update_lock_component_take(spdid_t spdid,
 								ul_t lock_id,
 								u32_t thd_id)
 {
-	call_desc_update(cos_get_thd_id(), state_lock_component_take);
+	call_desc_update(lock_id, state_lock_component_take);
 }
 
 static inline int block_cli_if_desc_update_post_fault_lock_component_take()
 {
-
 	return 1;
 }
 
@@ -360,7 +357,6 @@ static inline void block_cli_if_desc_update_lock_component_alloc(spdid_t spdid)
 
 static inline int block_cli_if_desc_update_post_fault_lock_component_alloc()
 {
-
 	return 1;
 }
 
@@ -378,7 +374,7 @@ static inline int block_cli_if_invoke_lock_component_alloc(spdid_t spdid,
 static inline void block_cli_if_desc_update_lock_component_free(spdid_t spdid,
 								ul_t lock_id)
 {
-	call_desc_update(cos_get_thd_id(), state_lock_component_free);
+	call_desc_update(lock_id, state_lock_component_free);
 }
 
 static inline void block_cli_if_recover_upcall_subtree(ul_t id)
@@ -387,7 +383,6 @@ static inline void block_cli_if_recover_upcall_subtree(ul_t id)
 
 static inline int block_cli_if_desc_update_post_fault_lock_component_free()
 {
-
 	return 1;
 }
 

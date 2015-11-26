@@ -62,10 +62,16 @@ typedef int spdid_t;
 typedef int tor_flags_t;
 typedef int evt_t;
 typedef int vaddr_t;
-typedef unsigned int u32_t;
-typedef unsigned short int us32_t;
-typedef unsigned long ul_t;
-typedef unsigned long long ull_t;
+
+typedef unsigned char      u8_t;
+typedef unsigned short int u16_t;
+typedef unsigned int       u32_t;
+typedef unsigned long long u64_t;
+typedef unsigned long      ul_t;
+typedef signed char      s8_t;
+typedef signed short int s16_t;
+typedef signed int       s32_t;
+typedef signed long long s64_t;
 
 struct usr_inv_cap {int a;};
 
@@ -94,10 +100,10 @@ struct usr_inv_cap {int a;};
 	CD_desc_data_retval_CD_##x##_CD_##y
 #define desc_terminate(x)	CD_desc_terminate_CD_##x
 
-// this is only for AST paser, remove later!!!!!
-#define CVECT_CREATE_STATIC(x) 
-#define COS_MAP_CREATE_STATIC(x) 
-#define CSLAB_CREATE(x, y)
-#define CSTUB_FN(x, y) x y##a
+#define resc_data(x, y)					\
+	typedef x CD_resc_data_CD_##x##_CD_##y;		\
+	CD_resc_data_CD_##x##_CD_##y
+
+#define temporal_sm(x)      void SM_temporal_SM_##x
 
 #endif /* _cos_idl_h */

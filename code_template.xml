@@ -146,7 +146,6 @@ enum state_codes { IDL_state_list };
 struct IDL_desc_track
 
 static volatile unsigned long global_fault_cnt = 0;
-static volatile unsigned long last_system_ticks = 0;
 static int first_map_init = 0;
 	]]>
 	</code>
@@ -635,7 +634,7 @@ static inline void block_cli_if_basic_id(IDLidtype id) {
 	struct desc_track *desc = call_desc_lookup(id);
 	assert(desc);
 	
-	IDL_fname_exist(IDL_desc_saved_params);
+	IDL_fname_exist(IDL_desc_saved_params, 0);
 
 	desc->state = IDL_init_state;       // set the state to the initial state
 	desc->fault_cnt = global_fault_cnt; // set the fault counter to the global
@@ -1027,7 +1026,6 @@ static inline int block_cli_if_desc_update_post_fault_IDL_fname() {
       <predicate name="not server_wakeup">
 	<code><![CDATA[
 static inline int block_cli_if_desc_update_post_fault_IDL_fname() {
-        IDL_restore_ticks
 	return 1;
 }
 	]]>
@@ -1153,8 +1151,6 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 		call_desc_update(IDL_id, state_IDL_fname);
 		ret = -ELOOP;
 	}
-
-        IDL_timestamp_track    
   
 	return ret;
 }
@@ -1176,7 +1172,7 @@ static inline int block_cli_if_track_IDL_fname(int ret, IDL_parsdecl) {
 		desc = call_desc_lookup(IDL_parent_id);
 		assert(desc);
 		int tmp;
-		tmp = IDL_root_fname_exist(IDL_parent_spd, IDL_parent_id);
+		tmp = IDL_root_fname_exist(IDL_root_params, IDL_parent_id);
 		if (tmp != IDL_parent_id) assert(0);
                 desc->fault_cnt = global_fault_cnt;
                 ret = -ELOOP;
@@ -1518,13 +1514,25 @@ redo:
 <!--***********************************************************************-->
   <interface name="server interface">
     <block name="block_ser_if_track_ds"><!-- <<<<<<<< block_ser_if_track_ds >>>>>>>>>-->
-      <predicate name="desc_block">
+      <predicate name="desc_block and resc_has_data">
 	<code><![CDATA[
 struct track_block {
 	IDLidtype IDL_id;
 	struct track_block *next, *prev;
 };
-struct track_block tracking_block_list[MAX_NUM_SPDS]; 
+struct track_block tracking_block_list[MAX_NUM_SPDS];
+unsigned long thd_tracking_data[MAX_NUM_THREADS];
+	]]>
+	</code>
+      </predicate>
+
+      <predicate name="desc_block and not resc_has_data">
+	<code><![CDATA[
+struct track_block {
+	IDLidtype IDL_id;
+	struct track_block *next, *prev;
+};
+struct track_block tracking_block_list[MAX_NUM_SPDS];
 	]]>
 	</code>
       </predicate>
@@ -1665,6 +1673,43 @@ IDL_fntype __ser_IDL_fname_exist(IDL_parsdecl) {
 	</code>
       </predicate>
 
+    </block>
+
+    <block name="block_ser_if_save_data"><!--<<<<< block_ser_if_save_data >>>>>-->
+      <predicate name="resc_has_data and desc_global and desc_dep_create_none">
+	<code><![CDATA[
+
+static inline void block_ser_if_save_data(IDL_parsdecl) {
+        unsigned long ret = 0;
+        ret = IDL_fname(IDL_params);
+        thd_tracking_data[cos_get_thd_id()] = ret;
+        return;
+}
+
+IDL_fntype __ser_IDL_service_save_data_IDL_fname(IDL_parsdecl) {
+	block_ser_if_save_data(IDL_params);
+	return;
+}
+	]]>
+	</code>
+      </predicate>
+    </block>
+
+    <block name="block_ser_if_restore_data"><!--<<<<<
+    block_ser_if_restore_data >>>>>-->
+      <predicate name="resc_has_data and desc_global and desc_dep_create_none">
+	<code><![CDATA[
+static inline IDL_fntype block_ser_if_restore_data(IDL_parsdecl) {
+        return thd_tracking_data[cos_get_thd_id()];
+}
+
+IDL_fntype __ser_IDL_service_restore_data_IDL_fname(IDL_parsdecl) {
+
+	return block_ser_if_restore_data(IDL_params);
+}
+	]]>
+	</code>
+      </predicate>
     </block>
 
     <block name="block_ser_if_upcall_creator"><!--<<<<< block_ser_if_upcall_creator >>>>>-->

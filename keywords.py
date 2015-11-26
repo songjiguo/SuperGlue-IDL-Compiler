@@ -23,6 +23,8 @@ header       = ""
 plot_graph   = True
 final_output = False
 bench = False
+cos_path = '/home/songjiguo/research/composite/src/'   
+cos_if_path = '/home/songjiguo/research/composite/src/components/interface/'   
 
 # define the root id for all services (even the service does not have dependency)
 rootid = {"ramfs":"1", "evt":"0", "lock":"0", "mem_mgr":"0", "periodic_wake":"0"}
@@ -84,6 +86,7 @@ def build_blk_code(cfblk, sfblk, gblk, marshallingblk, gblk_nonfunc):
                         elif ("creation"    in _preds.attrib["name"] or
                             "transition"    in _preds.attrib["name"] or
                             "terminal"      in _preds.attrib["name"] or
+                            "temporal"      in _preds.attrib["name"] or
                             "server_block"  in _preds.attrib["name"] or
                             "server_wakeup" in _preds.attrib["name"]):
                             cfblk.append(blknode)
@@ -99,13 +102,12 @@ def build_blk_code(cfblk, sfblk, gblk, marshallingblk, gblk_nonfunc):
     
 
 def get_lock_function(IFcode, service_name):
-    composite_path = '/home/songjiguo/research/composite/src'   
-    
+    global cos_path    
     if (service_name == "periodic_wake" or service_name == "ramfs"):
         return
     
     if (service_name != "sched"): 
-        cmd = 'find ' + composite_path + " -name " + service_name + ".c"
+        cmd = 'find ' + cos_path + " -name " + service_name + ".c"
         p = subprocess.Popen([cmd], shell=True, stdout=subprocess.PIPE)
         path, err = p.communicate()
         
@@ -114,7 +116,7 @@ def get_lock_function(IFcode, service_name):
             if ("_grp" in item): # hack for edge and edge_grp (start with this now)
                 path = item
     elif (service_name == "sched"):
-        path = composite_path + "/components/implementation/sched/cos_sched_base.c"
+        path = cos_path + "components/implementation/sched/cos_sched_base.c"
     else:
         path = path.split("\n")[0]  # there might be more than one file (e.g., evt.c)
 
@@ -155,10 +157,11 @@ class IDLServices(object):
 class IDLTuple(object):
     def __init__(self):
         self.info = {} 
-        self.sm_info = {} 
+        self.sm_info = {}
         self.desc_data_fields = []
         self.functions = []
-        self.ser_block_track = {}         
+        self.ser_block_track = {} 
+        self.tsm_info = {}    
         #init_tuple_keyword(self)
         #init_tuple_info(self)        
         
@@ -183,7 +186,7 @@ def init_function_keyword(node):
     node.desc_data_remove        = "desc_terminate" #--> in the form of (value)
     node.desc_lookup             = "desc_lookup" #--> in the form of (vale, type)
     node.desc_data_add           = "desc_data_add" #--> in the form of (target_to_add, value, type)
-    node.resc_data_add           = "resc_data"     #--> in the form of (desc_id, value, type)
+    node.resc_data               = "resc_data"     #--> in the form of (desc_id, value, type)
 
 def init_func_info(func):
     func.info[func.name]                = []
@@ -194,7 +197,7 @@ def init_func_info(func):
     func.info[func.desc_data]           = []
     func.info[func.desc_lookup]         = []
     func.info[func.desc_data_add]       = []
-    func.info[func.resc_data_add]       = []
+    func.info[func.resc_data]           = []
 
 
  # draw the SM transtion with the faulty path
@@ -203,7 +206,7 @@ def  draw_sm_transition(smg):
     #for node in xrange(smg.vcount()):
     #    print(smg.vs[node]["name"])
     
-    layout = [(10,0), (0,10), (20,10), (10,20), (0,0), (20,20), (25,25)]
+    layout = [(0,0), (100,100), (100,0), (0,100), (25,25), (25,75), (75,25), (-50,0), (25,25), (40, 40)]
     visual_style = {}
     visual_style["vertex_name"] = smg.vs["name"]
     visual_style["vertex_label_size"] = 20
@@ -242,62 +245,11 @@ def  draw_sm_transition(smg):
     # plot(testg, **visual_style)
     #===========================================================================
 
-lock_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(lock_stats)
-cos_asm_server_stub_spdid(lock_stats_len)
-'''
-
-evt_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(evt_grp_wait)
-cos_asm_server_stub_spdid(evt_set_prio)
-cos_asm_server_stub_spdid(evt_create) 
-cos_asm_server_stub_spdid(evt_stats) 
-cos_asm_server_stub_spdid(evt_stats_len)
-cos_asm_server_stub_spdid(evt_split_exist)
-'''
-
-mm_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(mman_release_page)
-cos_asm_server_stub_spdid(mman_get_page_exist)
-cos_asm_server_stub_spdid(mman_reflect)
-'''
-
-sched_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(sched_timeout_thd)
-cos_asm_server_stub_spdid(sched_create_net_acap)
-cos_asm_server_stub_spdid(sched_thread_params)
-cos_asm_server_stub(sched_tick_freq)
-cos_asm_server_stub(sched_cyc_per_tick)
-cos_asm_server_stub(sched_timer_stopclock)
-cos_asm_server_stub(sched_priority)
-cos_asm_server_stub(sched_create_thread)
-cos_asm_server_stub(sched_create_thread_default)
-cos_asm_server_stub(sched_restore_ticks)
-cos_asm_server_stub(sched_get_creation_timestamp)
-'''
-
 sched_timestamp_track_str = '''
 if (last_system_ticks > ret) {
     sched_restore_ticks(last_system_ticks);
     ret = last_system_ticks;
 } else last_system_ticks = ret;
-'''
-
-periodic_wake_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(periodic_wake_create_exist)
-cos_asm_server_stub(periodic_wake_get_misses)
-cos_asm_server_stub(periodic_wake_get_deadlines)
-cos_asm_server_stub(periodic_wake_get_lateness)
-cos_asm_server_stub(periodic_wake_get_miss_lateness)
-cos_asm_server_stub(periodic_wake_get_period)
-'''
-
-ramfs_norm_stub_S_str = '''
-cos_asm_server_stub_spdid(tmerge)
-cos_asm_server_stub_spdid(tread)
-cos_asm_server_stub_spdid(twrite)
-cos_asm_server_stub_spdid(trmeta)
-cos_asm_server_stub_spdid(twmeta)
 '''
 
 slab_alloc_str = '''
@@ -335,22 +287,6 @@ param_save(char *param, int param_len)
 }
 '''
 
-# this is for the timestamp tracking, TODO: move this to the restore data and save data section
-sched_timestamp_str = '''
-unsigned long thd_timestamp_track[MAX_NUM_THREADS];
-unsigned long __sg_sched_timestamp()
-{
-        unsigned long ret = 0;
-        ret = sched_timestamp();
-        thd_timestamp_track[cos_get_thd_id()] = ret;
-        return ret;
-}
-unsigned long __sg_sched_get_creation_timestamp()
-{
-        return thd_timestamp_track[cos_get_thd_id()];
-}
-'''
-
 benchmark_meas_start = '''
 IDL_fname_ubenchmark_flag = 1;
 rdtscll(ubenchmark_start);
@@ -376,8 +312,8 @@ __ser_treadp(spdid_t spdid, int tid, int len, int __pad0, int *off_len)
 }
 '''
 
-def add_c_header():
-    header = "/* " + IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
+def add_c_header(h_name):
+    header = ""
     header = header + r'''#include <cos_component.h>''' + "\n"
     header = header + r'''#include <sched.h>''' + "\n"
     header = header + r'''#include <print.h>''' + "\n"
@@ -385,13 +321,13 @@ def add_c_header():
     header = header + r'''#include <cos_map.h>''' + "\n"
     header = header + r'''#include <cos_list.h>''' + "\n"
     header = header + r'''#include <cstub.h>''' + "\n"
-    header = header + r'''#include <'''+ service_name  + ".h>\n"
+    header = header + r'''#include <'''+ h_name  + ".h>\n"
     header = header + slab_alloc_str + "\n"
     header = header + "\n"
     return header
 
-def add_s_header():
-    header = "/* " + IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
+def add_s_header(h_name):
+    header = ""
     header = header + r'''#include <cos_component.h>''' + "\n"
     header = header + r'''#include <sched.h>''' + "\n"
     header = header + r'''#include <print.h>''' + "\n"
@@ -399,10 +335,28 @@ def add_s_header():
     header = header + r'''#include <cos_map.h>''' + "\n"
     header = header + r'''#include <cos_list.h>''' + "\n"
     header = header + r'''#include <cstub.h>''' + "\n"
-    header = header + r'''#include <'''+ service_name  + ".h>\n"
+    header = header + r'''#include <'''+ h_name  + ".h>\n"
     header = header + "\n"
     return header
 
+cos_header_dict = {
+"sched": cos_if_path+"sched/__sched_h",               
+"mem_mgr": cos_if_path+"mem_mgr/__mem_mgr_h",
+"lock": cos_if_path+"lock/__lock_h",
+"evt": cos_if_path+"evt/__evt_h",
+"ramfs": cos_if_path+"rtorrent/__torrent_h",
+"periodic_wake":cos_if_path+"periodic_wake/__periodic_wake_h"
+}
+
+original_sstub = "/__stubs/s_stub.S"
+cos_asm_dict = {
+"sched": cos_if_path+"sched"+original_sstub,               
+"mem_mgr": cos_if_path+"mem_mgr"+original_sstub,
+"lock": cos_if_path+"lock"+original_sstub,
+"evt": cos_if_path+"evt"+original_sstub,
+"ramfs": cos_if_path+"rtorrent"+original_sstub,
+"periodic_wake":cos_if_path+"periodic_wake"+original_sstub
+}
   
 # these are just some util functions  
 DEBUG = 0

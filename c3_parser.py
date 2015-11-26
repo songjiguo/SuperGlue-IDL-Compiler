@@ -71,7 +71,7 @@ def parse_decl_info(node):
         return
     else:
         ret = parse_idl_str('SM', node.name)
-      
+    
     if (ret[0] == "creation"):
         if (creation_list): # for example, there are 2 mapping creations functoin for mem_mgr 
             creation_list.append((creation_list[-1][-1], ret[1])) 
@@ -88,6 +88,9 @@ def parse_decl_info(node):
     elif (ret[0] == "transition"):
         transition_list.append((ret[1], ret[2]))
         result.tuple[-1].sm_info[ret[0]] = transition_list
+    elif (ret[0] == "temporal"):
+        result.tuple[-1].tsm_info[ret[0]]  = ret[1]
+        
 #===============================================================================
 # # Struct: [name, decls**]
 # # struct is node.decls  --> decl list (node is Struct)
@@ -216,22 +219,36 @@ def parse_parameters(node):
     return func_params
            
 def parse_func(node):
-    global idl_parse_result 
+    global idl_parse_result
     func_params = [] 
     
     ##### begin of a function #####
     fun = result.tuple[-1].functions[-1]   # last added tuple and last added functoin
     fun_info = fun.info
     #pprint (result.tuple[0].sm_info)
-
     fun_info[fun.name] = node.type.declname # set the function name
-    for k, v in result.tuple[-1].sm_info.iteritems():
-        tmp_list = [x for t in v for x in t]
-        if (("null" in tmp_list or "end" in tmp_list) and fun_info[fun.name] in tmp_list):
-            fun_info[fun.sm_state]  = k
-    if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
-        fun_info[fun.sm_state]  = "transition"
     
+    if (fun_info[fun.name] in s_list):
+        fun_info[fun.sm_state]  = "creation"
+    elif (fun_info[fun.name] in e_list):
+        fun_info[fun.sm_state]  = "terminal"
+    elif (fun_info[fun.name] in t_list):
+        fun_info[fun.sm_state]  = "transition"
+    elif (fun_info[fun.name] in time_list):
+        fun_info[fun.sm_state]  = "temporal"
+    else:
+        fun_info[fun.sm_state]  = "none"
+
+    #===========================================================================
+    #     if (("null" in tmp_list or "end" in tmp_list) and fun_info[fun.name] in tmp_list):
+    #         fun_info[fun.sm_state]  = k
+    # if not fun_info[fun.sm_state]:     # for any function that has not been set up the state, set it to "transition"
+    #     fun_info[fun.sm_state]  = "transition"
+    #===========================================================================
+    
+    #print(fun_info[fun.sm_state])
+    #print(fun_info[fun.name])
+    #exit()
     #pprint(fun_info)
     #print()
     #print (node.type.declname)
@@ -265,7 +282,7 @@ def parse_func(node):
           
     #### return of a function ####        
     func_return = parse_idl_str('CD', str(get_dec_type_name(node)[0]))
-
+    
     if (not func_return[0]):   # normal return
         #print(" ".join(node.type.type.names))
         func_return[0] = node.type.type.names[0]
@@ -273,8 +290,6 @@ def parse_func(node):
         fun_info[fun.type] = " ".join(node.type.type.names)  # add type
     else:   # if there is "CD"
         fun_info[fun.type] = func_return[1]           # add type
-        #print(func_return[0])
-        #print (func_return[1])
         fun_info[func_return[0]] = func_return[1:]   # add into dict -- key, val
               
     construct_desc_fields(fun_info[fun.name], func_return)   # construct desc tracking fields
@@ -286,6 +301,23 @@ def parse_func(node):
 # # main function - parsing the input information
 #===============================================================================
 def parse_func_decl(ast):
+    global s_list, e_list, t_list, time_list
+    s_list = []
+    e_list = []
+    t_list = []
+    time_list = []
+    for k, v in result.tuple[-1].sm_info.iteritems():
+        if(k == "creation"):                   
+            s_list = [x for t in v for x in t]
+        elif(k == "terminal"):                    
+            e_list = [x for t in v for x in t]
+        elif(k == "transition"):
+            t_list = [x for t in v for x in t]
+
+    for k, v in result.tuple[-1].tsm_info.iteritems():
+        time_list.append(k)
+        time_list.append(v)
+        
     v = FuncDeclVisitor()
     v.visit(ast)
     result.gvars["desc_data"] = result.tuple[-1].desc_data_fields
@@ -344,26 +376,28 @@ if __name__ == "__main__":
         result.gvars["id"] = ["int","thdid"]
     
     #===========================================================================
-    #pprint (result.tuple[0].info)
-    #pprint (result.tuple[0].sm_info)
-    #pprint (result.tuple[0].ser_block_track)
-    #pprint (result.tuple[0].desc_data_fields)
-    #pprint (result.gvars)
-    #print("")
-    #pprint (result.tuple[0].functions[0].info)
-    #print("")
-    #pprint (result.tuple[0].functions[1].info)
-    #print("")
-    #pprint (result.tuple[0].functions[2].info)
-    #print("")
-    #pprint (result.tuple[0].functions[3].info)
-    #print("")
-    #pprint (result.tuple[0].functions[4].info)
-    #print("")
-    #pprint (result.tuple[0].functions[5].info)
-    #print("")
-    #pprint (result.tuple[0].functions[6].info)
-    #print("")
+    # pprint (result.tuple[0].info)
+    # pprint (result.tuple[0].sm_info)
+    # pprint (result.tuple[0].ser_block_track)
+    # pprint (result.tuple[0].desc_data_fields)
+    # pprint (result.gvars)
+    # print("")
+    # 
+    # print("")
+    # pprint (result.tuple[0].functions[1].info)
+    # print("")
+    # pprint (result.tuple[0].functions[2].info)
+    # print("")
+    # pprint (result.tuple[0].functions[3].info)
+    # print("")
+    # pprint (result.tuple[0].functions[4].info)
+    # print("")
+    # pprint (result.tuple[0].functions[5].info)
+    # print("")
+    # pprint (result.tuple[0].functions[6].info)
+    # print("")
+    # for item in result.tuple[0].functions:
+    #     pprint(item.info)
     #===========================================================================
     #exit()
       

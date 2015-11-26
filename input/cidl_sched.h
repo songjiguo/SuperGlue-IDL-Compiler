@@ -23,6 +23,10 @@ sm_transition(sched_create_thd, sched_component_take);
 sm_transition(sched_component_take, sched_component_release);
 sm_transition(sched_component_release, sched_component_take);
 
+sm_transition(sched_create_thd, sched_timestamp);
+sm_transition(sched_timestamp, sched_timeout);
+sm_transition(sched_timeout, sched_timestamp);
+
 sm_block(sched_block);
 sm_wakeup(sched_wakeup);
 
@@ -34,11 +38,11 @@ sched_create_thd(spdid_t spdid,
 
 int 
 sched_block(spdid_t spdid, 
-	    unsigned short int desc_data(dependency_thd));
+	    u16_t desc_data(dependency_thd));
 
 int 
 sched_wakeup(spdid_t spdid, 
-	     unsigned short int thdid);
+	     u16_t thdid);
 
 int
 sched_component_take(spdid_t spdid);
@@ -48,9 +52,9 @@ sched_component_release(spdid_t spdid);
 
 int
 sched_timeout(spdid_t spdid, 
-	      unsigned long amnt);
+	      ul_t desc_data(amnt));
 
-unsigned long
+resc_data(ul_t, timertick)
 sched_timestamp(void);
 
 #endif /* _COS_IDL_SCHED_H */

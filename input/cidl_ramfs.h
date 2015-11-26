@@ -51,20 +51,4 @@ int
 trelease(spdid_t spdid,
 	 td_t desc_terminate(tid));
 
-/* int */
-/* trmeta(spdid_t spdid, */
-/*        td_t desc(tid), */
-/*        const char *key, */
-/*        unsigned int klen, */
-/*        char *retval, */
-/*        unsigned int max_rval_len); */
-
-/* int */
-/* twmeta(spdid_t spdid, */
-/*        td_t desc(tid), */
-/*        const char *key, */
-/*        unsigned int klen, */
-/*        const char *val, */
-/*        unsigned int vlen); */
-
 #endif /* _COS_IDL_RAMFS_H */

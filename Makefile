@@ -1,8 +1,8 @@
 CC=gcc
 PYTHON=python
 PARSER=c3_parser.py
-FAKE_HEADER=fake_header.h
 TMP_OUTPUT=tmp_result
+FAKE_HEADER=fake_header.h
 
 # service name
 FS_SERVICE=ramfs
@@ -96,43 +96,43 @@ compile_all: compile_ramfs compile_lock compile_evt compile_sched compile_mem_mg
 compile_ramfs:
 	@echo
 	@echo "Compiling starting.... <<<"$(FS_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(FS_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(FS_SERVICE)_s_cstub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(FS_SERVICE)_c_stub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(FS_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 compile_lock:
 	@echo
 	@echo "Compiling starting.... <<<"$(LOCK_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_s_cstub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_c_stub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(LOCK_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 compile_evt:
 	@echo
 	@echo "Compiling starting.... <<<"$(EVT_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_s_cstub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_c_stub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(EVT_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 compile_sched:
 	@echo
 	@echo "Compiling starting.... <<<"$(SCHED_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_s_cstub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_c_stub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(SCHED_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 compile_mem_mgr:
 	@echo
 	@echo "Compiling starting.... <<<"$(MM_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_s_cstub.c
+	$(CC)  -Werror --include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_c_stub.c
+	$(CC)  -Werror --include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(MM_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 compile_periodic_wake:
 	@echo
 	@echo "Compiling starting.... <<<"$(PTE_SERVICE)">>>"
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_c_stub.c
-	$(CC)  -Werror -include $(FAKE_HEADER) -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_s_cstub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_c_stub.c
+	$(CC)  -Werror  -o output/$(TMP_OUTPUT) output/$(PTE_SERVICE)_s_cstub.c
 	rm output/$(TMP_OUTPUT)
 
 ########################################################
@@ -216,31 +216,37 @@ cp_ramfs:
 	cp output/final_$(FS_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/rtorrent/__stubs_rec_ramfs/__IDL_c_stub.c
 	cp output/final_$(FS_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/rtorrent/__stubs_rec_ramfs/__IDL_s_cstub.c
 	cp output/final_$(FS_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/rtorrent/__stubs_rec_ramfs/__IDL_s_stub.S
+	cp output/final_$(FS_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/rtorrent/__torrent_h_ramfs
 
 cp_lock:
 	cp output/final_$(LOCK_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(LOCK_SERVICE)/__stubs_rec/__IDL_c_stub.c
 	cp output/final_$(LOCK_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(LOCK_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(LOCK_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(LOCK_SERVICE)/__stubs_rec/__IDL_s_stub.S
+	cp output/final_$(LOCK_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/$(LOCK_SERVICE)/__lock_h_rec
 
 cp_evt:
 	cp output/final_$(EVT_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__stubs_rec/__IDL_c_stub.c
 	cp output/final_$(EVT_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(EVT_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__stubs_rec/__IDL_s_stub.S
+	cp output/final_$(EVT_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/$(EVT_SERVICE)/__evt_h_rec
 
 cp_sched:
 	cp output/final_$(SCHED_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_c_stub.c
 	cp output/final_$(SCHED_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(SCHED_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__stubs_rec/__IDL_s_stub.S
+	cp output/final_$(SCHED_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/$(SCHED_SERVICE)/__sched_h_rec
 
 cp_mem_mgr:
 	cp output/final_$(MM_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_c_stub.c
 	cp output/final_$(MM_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(MM_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__stubs_rec/__IDL_s_stub.S
+	cp output/final_$(MM_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/$(MM_SERVICE)/__mem_mgr_h_rec
 
 cp_periodic_wake:
 	cp output/final_$(PTE_SERVICE)_c_stub.c /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_c_stub.c
 	cp output/final_$(PTE_SERVICE)_s_cstub.c /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_s_cstub.c
 	cp output/final_$(PTE_SERVICE)_s_stub.S /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__stubs_rec/__IDL_s_stub.S
+	cp output/final_$(PTE_SERVICE)_idlc3.h /home/songjiguo/research/composite/src/components/interface/$(PTE_SERVICE)/__periodic_wake_h_rec
 
 #######################
 ## plot SM transition
@@ -282,6 +288,6 @@ plot_periodic_wake:
 ## clean all files
 ###################
 clean:
-	rm output/*.c
-	rm output/*.S
-	rm output/*.svg
+	-rm output/*.c
+	-rm output/*.S
+	-rm output/*.svg

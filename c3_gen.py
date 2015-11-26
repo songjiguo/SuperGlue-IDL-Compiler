@@ -157,6 +157,7 @@ server_wakeup          = False
 always_appear          = True  # alwasy appear
 marshalling            = False # no marshalling by default
 create_new_id          = True  # majority create APIs return new id, except mem_get_page and pte
+temporal               = False
 #===============================================================================
 #
 #  EXTRACT THE INFO AND CONSTRUCT THE CODE BLOCKS
@@ -170,7 +171,7 @@ create_new_id          = True  # majority create APIs return new id, except mem_
 def init_cond_table(gdescp, fdescp):
     global desc_close_self_only, desc_close_subtree, desc_dep_create_none, desc_dep_create_diff, desc_block;
     global desc_dep_create_same, desc_dep_close_removal, desc_dep_close_keep, desc_global, marshalling
-    global server_wakeup, server_block, resc_has_data, desc_has_data, creation,transition, terminal 
+    global server_wakeup, server_block, resc_has_data, desc_has_data, creation,transition, terminal, temporal
     if (1):
         desc_close_self_only    = "desc_close_self_only"   in gdescp
         desc_close_subtree      = "desc_close_subtree"     in gdescp
@@ -188,9 +189,9 @@ def init_cond_table(gdescp, fdescp):
         creation        = "creation"        in fdescp[2]
         transition      = "transition"      in fdescp[2]
         terminal        = "terminal"        in fdescp[2]
+        temporal        = "temporal"        in fdescp[2]
         server_block    = "server_block"    in fdescp[5]  # see the generate_description
         server_wakeup   = "server_wakeup"   in fdescp[5]
-        
     if (gdescp == "marshalling" and fdescp is None):
         marshalling = True
    
@@ -420,7 +421,9 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
     #print(keywords.service_name)
     # for now. we do not recover other system services that depend on ramfs and timed_evt
     # so basically there services are the top level service and no need to track/block
+    # TODO: in the future, this is possible
     if (keywords.service_name == "periodic_wake" or keywords.service_name == "ramfs"): return
+    
     if (ser_funcblocks):
         for serblk in ser_funcblocks:
             #print(serblk.show())
@@ -435,6 +438,8 @@ def generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode):
                     IFcode["server"]["server_code"][name] = code
     for k, v in result.tuple[0].ser_block_track.iteritems():
         IFcode["server"][k] = v
+    #pprint(IFcode["server"])
+    #exit()
 
 # initial creation -- starting point in SM transition, treat this specially            
 def init_creation(fdesc, subIFcode, IFcode, marshall_cp):
@@ -611,6 +616,7 @@ def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblo
         # 1) the fault has removed the data structure, and
         # 2) reflection has woken up the "blocked" threads, 
         #    which is supposed done by the wake up function anyway 
+        #pprint(subIFcode["blocks"])
         cstub_code = subIFcode["blocks"]["BLOCK_CLI_IF_CSTUB"]
         inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
         marshalling_ds = ""
@@ -726,11 +732,18 @@ def generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks):
                 paramdesc_list[i] = "desc->"+ param_list[i]
         subIFcode["parameters"]["desc_params"] = ', '.join(paramdesc_list)
         
+        # functions that not part of SM
+        if (fdesc[2] == "none"):
+            #IFcode[fdesc[0]] = subIFcode
+            continue
+        
         for fblk in funcblocks:
             #fblk.show()
             name, code = condition_eval(fblk, (IFDesc[0], fdesc))
             code = replace_params(result, fdesc, code, IFcode, 
                                   subIFcode, param_list, paramdecl_list)
+            #print(name)
+            #print(code)
             if (name and code):
                 subIFcode["blocks"][name] = code                
                 if (name != "BLOCK_CLI_IF_CSTUB"):  # cstub_fn is not normal function, no decl for it
@@ -775,11 +788,14 @@ def generate_description(result, funcdescps, globaldescp):
         for func in tup.functions:
             normalPara = func.normal_para
             idlRet  = []
-            idlPara = []            
+            idlPara = []
+            idlTime = []           
             block_or_wakeup = ""
             for key, value in func.info.iteritems():
                 if (key == func.name or key == func.sm_state): # skip function name and state (only IDL stuff) 
                     continue
+                elif (value and key is func.resc_data):
+                    idlRet.append((key, value))
                 elif (value and key is not func.desc_data_retval):
                     idlPara.append((key, value))
                 elif (func.info[func.name] in tup.ser_block_track.values()):
@@ -797,12 +813,11 @@ def generate_description(result, funcdescps, globaldescp):
             #         if (tuple(code[1]) in normalPara): create_new_id = False
             #         if (keywords.service_name == "periodic_wake"): create_new_id = False
             #===================================================================
-                                 
             funcdescps.append(perFunc)
     
     # hard code these two special services that do not return new id
     if (keywords.service_name == "periodic_wake"): create_new_id = False
-    if (keywords.service_name == "mem_mgr"): create_new_id = False
+    if (keywords.service_name == "mem_mgr"): create_new_id = False    
     #pprint(funcdescps)
     #print(create_new_id)
     #exit()
@@ -848,6 +863,7 @@ def update_current_state(result, state_list, IFcode):
                     code = code.replace("IDL_curr_state", "desc->state = " + str(item))
                     IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
                 else:
+                    if (func.info[func.sm_state]) == "none": continue
                     code = IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]
                     code = code.replace("IDL_curr_state;", "")
                     IFcode[func.info[func.name]]["blocks"]["BLOCK_CLI_IF_TRACK"]  = code
@@ -856,10 +872,6 @@ def construct_sm_graph(from_list, to_list, state_list, IFcode):
     smg = Graph(directed=True)
     smg.add_vertices(state_list)
     
-    #print(from_list)
-    #print(to_list)
-    #print()
-
     smg.add_edges(zip(from_list,to_list))
         
     for e in smg.es:
@@ -888,17 +900,6 @@ def generate_sm_transition(result, funcblocks, IFcode):
     for tup in result.tuple:
         # here we fix the start and end to be 1st and 2nd in the list
         for func in tup.functions:
-            ##!!!!!!!! 
-            ##!!!!!!!! Ignore non-state function. TODO: add this into cidl_ file
-            ##!!!!!!!! 
-            if (func.info[func.name] == "trmeta" or
-                func.info[func.name] == "twmeta" or
-                func.info[func.name] == "sched_timeout" or
-                #func.info[func.name] == "sched_component_take" or
-                #func.info[func.name] == "sched_component_release" or
-                func.info[func.name] == "sched_timestamp"):
-                continue
-            
             if (func.info[func.sm_state] == "creation"):
                 fn_list.insert(0, func.info[func.name])
                 state_list.insert(0, "state_"+func.info[func.name])
@@ -933,6 +934,11 @@ def generate_sm_transition(result, funcblocks, IFcode):
                 transition_list_tuple.append((item[0], item[1], tmp_str, fn_str))
 
     #pprint(IFcode)
+    #pprint(state_list)
+    #pprint(transition_list_tuple)
+    #pprint(transition_list_code)
+    #exit()
+
     code = IFcode["global_non_function"]["BLOCK_CLI_IF_TRACKING_STATE"]
     code = code.replace("IDL_state_list", ', '.join(state_list))
     code = code.replace("IDL_transition_rules", ' '.join(transition_list_code))
@@ -947,13 +953,17 @@ def generate_sm_transition(result, funcblocks, IFcode):
     update_current_state(result, state_list, IFcode) 
     smg = construct_sm_graph(from_list, to_list, state_list, IFcode)
 
+    #pprint(from_list)
+    #pprint(to_list)
+    #pprint(state_list)
+    #exit()
+    
     # this is the key to the c3 recovery
     recover_sm_transition(state_list, smg, IFcode)
 
     # plot the state transition
     if (keywords.plot_graph == True):      
         keywords.draw_sm_transition(smg)
-
     return smg
     
 # ***********!!!!!!!!*************
@@ -1081,6 +1091,8 @@ def construct_server_code(result, IFcode):
     IFresult["SERVER"]["block_func"] = {}
     IFresult["SERVER"]["wakeup_func"] = {}
     IFresult["SERVER"]["create_exist_func"] = {}
+    IFresult["SERVER"]["save_data"] = {}
+    IFresult["SERVER"]["restore_data"] = {}
     
     for k, v in IFcode["server"]["server_code"].items():
         if ("BLOCK_SER_IF_RECREATE_EXIST" == k):  # 
@@ -1157,6 +1169,49 @@ def construct_server_code(result, IFcode):
             tmp.append((keywords.service_name + "_client_fault_notification",
                         "__ser_" + keywords.service_name + "_client_fault_notification"))
             IFcode["s_stub.S"] = tmp
+
+        elif ("BLOCK_SER_IF_SAVE_DATA" == k):  # save data at the server interface
+            func_name = ""
+            for tup in result.tuple:
+                for func in tup.functions:
+                    if (func.info[func.resc_data]):
+                        func_name = func.info["funcname"]
+                        break
+            tmp_par = IFcode[func_name]["parameters"]["params"]
+            v = v.replace("IDL_fname", func_name)
+            v = v.replace("IDL_parsdecl", IFcode[func_name]["parameters"]["params_decl"])
+            v = v.replace("IDL_params", tmp_par)
+            v = v.replace("IDL_fntype", lookup_functype(result, func_name))
+
+            IFresult["SERVER"]["save_data"]["code"] = v
+            server_code = server_code + v
+
+            # prepare for s_stub.S
+            tmp = IFcode["s_stub.S"]
+            tmp.append((func_name, "__ser_IDL_service_save_data_"+func_name))
+            IFcode["s_stub.S"] = tmp
+
+        elif ("BLOCK_SER_IF_RESTORE_DATA" == k):  # restore data at the server interface
+            func_name = ""
+            for tup in result.tuple:
+                for func in tup.functions:
+                    if (func.info[func.resc_data]):
+                        func_name = func.info["funcname"]
+                        break
+            tmp_par = IFcode[func_name]["parameters"]["params"]
+            v = v.replace("IDL_fname", func_name)
+            v = v.replace("IDL_parsdecl", IFcode[func_name]["parameters"]["params_decl"])
+            v = v.replace("IDL_params", tmp_par)
+            v = v.replace("IDL_fntype", lookup_functype(result, func_name))
+
+            IFresult["SERVER"]["restore_data"]["code"] = v
+            server_code = server_code + v
+
+            # prepare for s_stub.S
+            tmp = IFcode["s_stub.S"]
+            tmp.append((keywords.service_name + "_restore_data_"+func_name,
+                        "__ser_" + keywords.service_name + "_restore_data_"+func_name))
+            IFcode["s_stub.S"] = tmp
             
     #print(server_code)
     #print(IFcode["s_stub.S"])
@@ -1165,7 +1220,9 @@ def construct_server_code(result, IFcode):
     marshall_fn = ""
     for fn in result.tuple[0].functions:
         fname = fn.info["funcname"]
-        if (IFcode[fname]["marshall fn"]):
+        if (fname in IFcode and 
+            "marshall fn" in IFcode[fname] and
+            IFcode[fname]["marshall fn"]):
             marshall_fn = marshall_fn + IFcode[fname]["marshall fn"]
             marshall_fn = IFcode[fname]["marshall ds"] + marshall_fn
             marshall_fn = marshall_fn.replace("IDL_fname", fname)
@@ -1219,9 +1276,6 @@ def construct_server_code(result, IFcode):
     server_code = server_code.replace("IDLidtype", final_id_type)
     server_code = server_code.replace("IDLparentidtype", final_parent_id_type)
     
-    # this is for simplicity now -- should generate the interface code for save/restore data
-    if (keywords.service_name == "sched"):
-        server_code = server_code + keywords.sched_timestamp_str
     return server_code
 
 def construct_client_code(result, IFcode):
@@ -1241,7 +1295,7 @@ def construct_client_code(result, IFcode):
     for tup in result.tuple:
         for func in tup.functions:
             name = func.info["funcname"]
-            tmp[name]= IFcode[name]
+            if (name in IFcode): tmp[name]= IFcode[name]
     IFresult["FUNCTIONS"] = tmp
  
     # start pasting the code
@@ -1254,7 +1308,7 @@ def construct_client_code(result, IFcode):
     result_code = result_code + "\n"   
 
     for k, v in IFresult["FUNCTIONS"].items():
-        result_code = result_code + v["marshall ds"]
+        if ("marshall ds" in v): result_code = result_code + v["marshall ds"]
     result_code = result_code + "\n"
     
     
@@ -1293,7 +1347,7 @@ def construct_client_code(result, IFcode):
             result_code = result_code + _v
             
     for k, v in IFresult["FUNCTIONS"].items():
-        result_code = result_code + v["cstub_fn"]
+        if ("cstub_fn" in v): result_code = result_code + v["cstub_fn"]
         
     # finally replace IDL_id, IDL_server_id, IDL_parent_id
     result_code = result_code.replace("IDL_id", final_id)
@@ -1323,52 +1377,123 @@ def construct_client_code(result, IFcode):
     result_code = result_code.replace("IDLidtype", final_id_type)
     result_code = result_code.replace("IDLparentidtype", final_parent_id_type)
     
+    
+    #print(root_function)
+    tmp = IFcode[root_function]["parameters"]["params"]
+    if ("flags" in tmp): tmp = tmp.replace("flags", "0")
+    result_code = result_code.replace("IDL_root_params", tmp)
     # hard code sched timeout and timestamp
-    result_code = result_code.replace("state_sched_timestamp", "0")
-    result_code = result_code.replace("state_sched_timeout", "0")
+    #result_code = result_code.replace("state_sched_timestamp", "0")
+    #result_code = result_code.replace("state_sched_timeout", "0")
     #exit()
     return result_code
 
-def construct_s_stub_code(result, IFcode):
-    result_code = """
-/* How IDL know when to use simple stack or stack? */
-#include <cos_asm_server_stub_simple_stack.h>
-//#include <cos_asm_server_stub.h>
+def construct_header(result, IFcode):
+    header_code = ""
+
+    for tup in result.tuple:
+        for func in tup.functions:
+            if (func.info["funcsm"] == "creation" and (keywords.service_name != "sched" and (desc_global or (not create_new_id)))):
+                fnname  = func.info["funcname"]+"_exist"
+                fntype  = func.info["functype"]
+                fnparamsdecl = IFcode[func.info["funcname"]]["parameters"]["params_decl"] + \
+                                ", IDLidtype IDL_id"
+                header_code = header_code + fntype +" " + fnname + "(" + fnparamsdecl + ");\n"
+            elif (func.info[func.resc_data]):
+                fnname = func.info["funcname"]
+                fntype = lookup_functype(result, fnname)
+                fnparamsdecl = IFcode[fnname]["parameters"]["params"]
+                #tmp_name = keywords.service_name + "_save_data_" + fnname 
+                #header_code = header_code + fntype +" " + tmp_name + "(" + fnparamsdecl + ");\n"
+                tmp_name = keywords.service_name + "_restore_data_" + fnname 
+                header_code = header_code + fntype +" " + tmp_name + "(" + fnparamsdecl + ");\n"
+
+    if (desc_global and desc_dep_create_same):
+        header_code = header_code + "int "+keywords.service_name+\
+                    "_upcall_creator(spdid_t spdid, IDLidtype IDL_id);\n\n"    
+        
+    if (desc_global and (not desc_dep_create_none)):
+        header_code = header_code + "extern void "+ keywords.service_name +\
+                      "_cli_if_recover_upcall_entry(IDLidtype IDL_id);\n"
+                      
+    if (desc_global and desc_close_subtree):
+        header_code = header_code + "extern void "+ keywords.service_name +\
+                      "_cli_if_recover_upcall_subtree_entry(IDLidtype IDL_id);\n"
+        header_code = header_code + "extern void "+ keywords.service_name +\
+                      "_cli_if_remove_upcall_subtree_entry(IDLidtype IDL_id);\n"
+
+    # !!! Do not use per function predicate here
     
-.text
-    """
+    if ("BLOCK_SER_IF_BLOCK_TRACK" in IFcode["server"]["server_code"]):
+        header_code = header_code + "void " + keywords.service_name + \
+                      "_client_fault_notification"+"(spdid_t spdid);\n"
+    
+    header_code = header_code.replace("IDLidtype", final_id_type)
+    header_code = header_code.replace("IDL_id", final_id)
+    
+    cos_header = keywords.cos_header_dict[keywords.service_name]  
+    f = open(cos_header, 'r')
+    origin_header = f.readlines()
+    f.close()
+    origin_header.insert(-1, IDL_banner)
+    origin_header.insert(-1, '''#include <c3_test.h> ''' + "\n")
+    origin_header.insert(-1, header_code)
+    #print("".join(origin_header))
+    #exit()
+    header_code = "".join(origin_header)           
+    
+    #print(header_code)
+    #exit()
+    return header_code
+
+def construct_s_stub_code(result, IFcode):
+#===============================================================================
+#     result_code = """
+# /* How IDL know when to use simple stack or stack? */
+# #include <cos_asm_server_stub_simple_stack.h>
+# //#include <cos_asm_server_stub.h>
+#     
+# .text
+#     """
+#     #asm_dict
+#===============================================================================
+    cos_asm = keywords.cos_asm_dict[keywords.service_name]  
+    f = open(cos_asm, 'r')
+    origin_cos_asm = f.readlines()
+    f.close()
+    
+    test = ""
+    result_code = ""
     tmp_list = []
     for item in IFcode["s_stub.S"]:
         result_code = result_code + "\ncos_asm_server_fn_stub_spdid(" + item[0] + "," + item[1]+ ")"
         tmp_list.append(item[0])
+        for line in origin_cos_asm:
+            if ("(" in line): 
+                if (item[0] == line[line.index("(") + 1:line.rindex(")")]):
+                    # if find an existing one, remove it, and replace with the new one
+                    origin_cos_asm.remove(line)
+                    break;
+            if ("(" in line and "," in line):
+                if (item[0] == line[line.index("(") + 1:line.rindex(",")]):
+                    # if find an existing one (fn version), remove it, and replace with the new one
+                    origin_cos_asm.remove(line)
+                    break;
+    
+    result_code = "".join(origin_cos_asm) + result_code
         
-    for item in result.tuple[0].functions:
-        if (item.info["funcname"] in tmp_list):
-            continue
-        result_code = result_code + "\ncos_asm_server_stub_spdid(" + item.info["funcname"] + ")"
-        
-    # here we hard code the other non IDL entries (for Composite compiling purpose)
-    if (keywords.service_name == "ramfs"):
-        result_code = result_code + keywords.ramfs_norm_stub_S_str
-    if (keywords.service_name == "lock"):
-        result_code = result_code + keywords.lock_norm_stub_S_str
-    if (keywords.service_name == "evt"):
-        result_code = result_code + keywords.evt_norm_stub_S_str
-    if (keywords.service_name == "mem_mgr"):
-        result_code = result_code + keywords.mm_norm_stub_S_str
-    if (keywords.service_name == "sched"):
-        result_code = result_code + keywords.sched_norm_stub_S_str
-    if (keywords.service_name == "periodic_wake"):
-        result_code = result_code + keywords.periodic_wake_norm_stub_S_str
+    if (desc_global and desc_dep_create_same):
+        result_code = result_code + "\ncos_asm_server_stub_spdid(" + creation_function + "_exist" + ")"
+    if (desc_global and desc_dep_create_diff):
+        result_code = result_code + "\ncos_asm_server_stub_spdid(" + root_function + "_exist" + ")"
+    if (not desc_global and not create_new_id):
+        result_code = result_code + "\ncos_asm_server_stub_spdid(" + creation_function + "_exist" + ")"
+    if (desc_global and desc_dep_create_same):
+        result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name +"_upcall_creator)" 
 
-    # for example, mem_mgr does not have mman_upcall_creater
-    if ("BLOCK_CLI_IF_UPCALL_CREATOR" in IFcode["global"]):
-        if (keywords.service_name == "evt"):
-            result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name\
-                                    +"_upcall_creator)" 
     #print(result_code)
-    #print(keywords.service_name)
     #exit()
+    result_code = result_code.replace("IDL_service", keywords.service_name)
     return result_code
     
 def write_code_to_file(code, output_file):
@@ -1395,7 +1520,8 @@ def write_code_to_file(code, output_file):
     """
             code = code + "\n" + fake_main
         
-        code = r'''#include "cidl_gen.h"''' + "\n" + code
+        #code = r'''#include "cidl_gen.h"''' + "\n" + code
+        code = r'''#include "fake_header.h"''' + "\n" + code
 
        
     with open("tmp.c", "w") as text_file:
@@ -1408,13 +1534,13 @@ def write_code_to_file(code, output_file):
         parser = c_parser.CParser()
         ast = parse_file(output_file, use_cpp=True,
                          cpp_path='cpp',
-                         cpp_args=r'-Iutils/fake_libc_include')    
+                         cpp_args=r'-Iutils/fake_libc_include')
         #ast.show()
 
 def paste_idl_code(result, IFcode):
+    global  IDL_banner
     
-    #sname = re.findall(r'cidl_(.*?).h',keywords.service_name + "_c_stub.c")[0]
-    #sname = result.gvars["global_info"]["service_name"]
+    IDL_banner = "/* " + keywords.IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"    
     sname = keywords.service_name
 
     if (keywords.final_output == True):
@@ -1425,21 +1551,32 @@ def paste_idl_code(result, IFcode):
     if (keywords.bench == True):
         client_code = keywords.benchmark_vars + client_code
     if (keywords.final_output == True):
-        client_code = keywords.add_c_header() + client_code
+        if (keywords.service_name == "ramfs"):
+            client_code = IDL_banner + keywords.add_c_header("torrent") + client_code
+        else:
+            client_code = IDL_banner + keywords.add_c_header(keywords.service_name) + client_code
     write_code_to_file(client_code, "output/" + sname + "_c_stub.c")  
     
     # server side code
     server_code = construct_server_code(result, IFcode)
     if (keywords.final_output == True):
-        server_code = keywords.add_s_header() + server_code
+        if (keywords.service_name == "ramfs"):
+            server_code = IDL_banner + keywords.add_c_header("torrent") + server_code
+        else:
+            server_code = IDL_banner + keywords.add_c_header(keywords.service_name) + server_code
     write_code_to_file(server_code, "output/" + sname + "_s_cstub.c")
+    
+    # header file
+    header_code = construct_header(result, IFcode)
+    #if (keywords.final_output == True):
+    #    header_code = IDL_banner + header_code
+    write_code_to_file(header_code, "output/" + sname + "_idlc3.h")
     
     # s_stub.S
     s_stub_code = construct_s_stub_code(result, IFcode)
-    header = "/* " + keywords.IDL_ver + " ---  " + time.strftime("%c") + " */\n\n"
-    s_stub_code = header + s_stub_code
+    s_stub_code = IDL_banner + s_stub_code
     write_code_to_file(s_stub_code, "output/" + sname + "_s_stub.S")
-    
+
     print ("\n<<<IDL process is done!!>>>")
 
 def idl_generate(result, parsed_ast):
@@ -1462,20 +1599,19 @@ def idl_generate(result, parsed_ast):
 
     #keywords.read_from_template_code(IFcode)    
     IFDesc = (globaldescp, funcdescps)
-
+    
     # build blocks and descriptions
-    generate_description(result, funcdescps, globaldescp) 
+    generate_description(result, funcdescps, globaldescp)
     init_blocks(globalblocks, funcblocks, ser_funcblocks, marshall_funcblocks, global_nonfun_blocks)
     #pprint(funcdescps)
     # evaluate the conditions and generate block code
     generate_gblocks(result, globalblocks, global_nonfun_blocks, IFDesc, IFcode)
-    
     generate_globalvas(result, IFcode)
     # server side code
     generate_ser_fblocks(result, ser_funcblocks, IFDesc, IFcode)
     # client side code
     generate_fblocks(result, funcblocks, IFDesc, IFcode, marshall_funcblocks)
-    
+
     # add SM transition code
     generate_sm_transition(result, funcblocks, IFcode)
 
@@ -1491,7 +1627,6 @@ def idl_generate(result, parsed_ast):
     #for item in globalblocks:
     #    item.show()
     #exit()
-    
     paste_idl_code(result, IFcode)   # make some further IFprocess here
     
     #pprint(IFcode)
