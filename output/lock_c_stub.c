@@ -432,6 +432,7 @@ CSTUB_FN(int, lock_component_pretake)(struct usr_inv_cap * uc, spdid_t spdid,
 			goto redo;
 		}
 	}
+
 	ret =
 	    block_cli_if_track_lock_component_pretake(ret, spdid, lock_id,
 						      thd_id);
@@ -463,6 +464,7 @@ CSTUB_FN(int, lock_component_release)(struct usr_inv_cap * uc, spdid_t spdid,
 			goto redo;
 		}
 	}
+
 	ret = block_cli_if_track_lock_component_release(ret, spdid, lock_id);
 
 	if (unlikely(ret == -ELOOP))
@@ -491,6 +493,7 @@ CSTUB_FN(int, lock_component_take)(struct usr_inv_cap * uc, spdid_t spdid,
 			goto redo;
 		}
 	}
+
 	ret =
 	    block_cli_if_track_lock_component_take(ret, spdid, lock_id, thd_id);
 
@@ -517,6 +520,7 @@ CSTUB_FN(ul_t, lock_component_alloc) (struct usr_inv_cap * uc, spdid_t spdid) {
 			goto redo;
 		}
 	}
+
 	ret = block_cli_if_track_lock_component_alloc(ret, spdid);
 
 	if (unlikely(ret == -ELOOP))
@@ -545,6 +549,7 @@ CSTUB_FN(int, lock_component_free)(struct usr_inv_cap * uc, spdid_t spdid,
 			goto redo;
 		}
 	}
+
 	ret = block_cli_if_track_lock_component_free(ret, spdid, lock_id);
 
 	if (unlikely(ret == -ELOOP))

@@ -1366,10 +1366,14 @@ CSTUB_FN(IDL_fntype, IDL_fname) (struct usr_inv_cap *uc, IDL_parsdecl) {
 	
 	call_map_init();
 
+        IDL_special_case_1
+
 redo:
 	block_cli_if_desc_update_IDL_fname(IDL_params);
 
 	IDL_benchmark_end
+
+        IDL_special_case_2
 
 	ret = block_cli_if_invoke_IDL_fname(IDL_params, ret, &fault, uc); 
         if (unlikely (fault)){
@@ -1381,9 +1385,14 @@ redo:
 			goto redo;
 		}
         }
+
+        IDL_special_case_3
+
 	ret = block_cli_if_track_IDL_fname(ret, IDL_params);
 
 	if (unlikely(ret == -ELOOP)) goto redo;
+
+        IDL_special_case_4
 
         return ret;
 }

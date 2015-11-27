@@ -516,6 +516,19 @@ def sched_timer_tick_track(subIFcode, fdesc):
         code = code.replace("CSTUB_INVOKE", "CSTUB_INVOKE_NULL")
     subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"] = code
 
+def deal_any_special_case_cstub(cstub_code, fdesc):
+    if (fdesc[0] == "__mman_alias_page"):
+        cstub_code = cstub_code.replace("IDL_special_case_1", "if (cos_spd_id() == 5) goto con;")
+        cstub_code = cstub_code.replace("IDL_special_case_2", "con:")
+        cstub_code = cstub_code.replace("IDL_special_case_3", "if (cos_spd_id() == 5) goto done;")
+        cstub_code = cstub_code.replace("IDL_special_case_4", "done:")
+    else:
+        cstub_code = cstub_code.replace("IDL_special_case_1", "")
+        cstub_code = cstub_code.replace("IDL_special_case_2", "")
+        cstub_code = cstub_code.replace("IDL_special_case_3", "")
+        cstub_code = cstub_code.replace("IDL_special_case_4", "")
+    return cstub_code
+    
 # marshall the parameter list (using cbuf), if 2 conditions are met
 # 1) more than 4 parameters (Composite passes up to 4 parameters)
 # 2) passing pointer, and which is not "__retval" type
@@ -620,6 +633,9 @@ def construct_invocation_code(result, fdesc, subIFcode, IFcode, marshall_funcblo
         cstub_code = subIFcode["blocks"]["BLOCK_CLI_IF_CSTUB"]
         inkcode = subIFcode["blocks"]["BLOCK_CLI_IF_INVOKE"]
         marshalling_ds = ""
+
+    # for example, mman_alias does not track booter now
+    cstub_code = deal_any_special_case_cstub(cstub_code, fdesc)
 
     # marshalling
     subIFcode["cstub_fn"] = replace_params(result, fdesc, cstub_code, IFcode, 
@@ -1469,7 +1485,7 @@ def construct_s_stub_code(result, IFcode):
         result_code = result_code + "\ncos_asm_server_fn_stub_spdid(" + item[0] + "," + item[1]+ ")"
         tmp_list.append(item[0])
         for line in origin_cos_asm:
-            if ("(" in line): 
+            if ("(" in line and "," not in line): 
                 if (item[0] == line[line.index("(") + 1:line.rindex(")")]):
                     # if find an existing one, remove it, and replace with the new one
                     origin_cos_asm.remove(line)
@@ -1479,7 +1495,7 @@ def construct_s_stub_code(result, IFcode):
                     # if find an existing one (fn version), remove it, and replace with the new one
                     origin_cos_asm.remove(line)
                     break;
-    
+
     result_code = "".join(origin_cos_asm) + result_code
         
     if (desc_global and desc_dep_create_same):
@@ -1489,8 +1505,18 @@ def construct_s_stub_code(result, IFcode):
     if (not desc_global and not create_new_id):
         result_code = result_code + "\ncos_asm_server_stub_spdid(" + creation_function + "_exist" + ")"
     if (desc_global and desc_dep_create_same):
-        result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name +"_upcall_creator)" 
+        result_code = result_code + "\ncos_asm_server_stub_spdid("+keywords.service_name +"_upcall_creator)"
+        
 
+    # hard code these for now (ramfs uses twmeta to restore data, but not from client)
+    # this can be auto generated TODO this later
+    result_code = result_code.replace("cos_asm_server_fn_stub_spdid(trmeta, __sg_trmeta)",
+                                      "cos_asm_server_stub_spdid(trmeta)")
+    result_code = result_code.replace("cos_asm_server_fn_stub_spdid(twmeta, __sg_twmeta)",
+                                      "cos_asm_server_stub_spdid(twmeta)")    
+    result_code = result_code.replace("cos_asm_server_fn_stub_spdid(tmerge, __sg_tmerge)",
+                                      "cos_asm_server_stub_spdid(tmerge)")    
+    
     #print(result_code)
     #exit()
     result_code = result_code.replace("IDL_service", keywords.service_name)
